@@ -1,0 +1,23 @@
+{
+  "name": "@nx-pkg/mainstay-cli",
+  "version": "0.30.0",
+  "description": "Mainstay CLI tool",
+  "homepage": "https://github.com/nxpkg/mainstay#readme",
+  "bugs": {
+    "url": "https://github.com/nxpkg/mainstay/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nxpkg/mainstay.git"
+  },
+  "license": "(MIT OR Apache-2.0)",
+  "bin": {
+    "mainstay": "./mainstay.js"
+  },
+  "scripts": {
+    "prepack": "[ \"$(uname -op)\" != \"x86_64 GNU/Linux\" ] && (echo Can be packed only on x86_64 GNU/Linux && exit 1) || ([ \"$(./mainstay --version)\" != \"mainstay-cli $(jq -r .version package.json)\" ] && (echo Check mainstay binary version && exit 2) || exit 0)"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

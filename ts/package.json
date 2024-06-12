@@ -1,0 +1,8 @@
+{
+  "name": "@nx-pkg/monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "tests"
+  ]
+}

@@ -1,0 +1,20 @@
+[package]
+name = "new-idl"
+version = "0.1.0"
+description = "Created with Mainstay"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "new_idl"
+
+[features]
+no-entrypoint = []
+no-idl = []
+cpi = ["no-entrypoint"]
+default = []
+idl-build = ["mainstay-lang/idl-build"]
+
+[dependencies]
+mainstay-lang = { path = "../../../../lang" }
+external = { path = "../external", features = ["no-entrypoint"] }

@@ -1,0 +1,22 @@
+[package]
+name = "mainstay-derive-accounts"
+version = "0.30.0"
+authors = ["Mainstay Maintainers <accounts@200ms.io>"]
+repository = "https://github.com/nxpkg/mainstay"
+license = "Apache-2.0"
+description = "Mainstay Derive macro for accounts"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[features]
+allow-missing-optionals = ["mainstay-syn/allow-missing-optionals"]
+mainstay-debug = ["mainstay-syn/mainstay-debug"]
+idl-build = ["mainstay-syn/idl-build"]
+init-if-needed = ["mainstay-syn/init-if-needed"]
+
+[dependencies]
+mainstay-syn = { path = "../../syn", version = "0.30.0" }
+quote = "1"
+syn = { version = "1", features = ["full"] }

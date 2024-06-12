@@ -1,0 +1,20 @@
+[package]
+name = "mainstay-attribute-error"
+version = "0.30.0"
+authors = ["Mainstay Maintainers <accounts@200ms.io>"]
+repository = "https://github.com/nxpkg/mainstay"
+license = "Apache-2.0"
+description = "Mainstay attribute macro for creating error types"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[features]
+mainstay-debug = ["mainstay-syn/mainstay-debug"]
+idl-build = ["mainstay-syn/idl-build"]
+
+[dependencies]
+mainstay-syn = { path = "../../syn", version = "0.30.0" }
+quote = "1"
+syn = { version = "1", features = ["full"] }

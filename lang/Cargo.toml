@@ -1,0 +1,62 @@
+[package]
+name = "mainstay-lang"
+version = "0.30.0"
+authors = ["Mainstay Maintainers <accounts@200ms.io>"]
+repository = "https://github.com/nxpkg/mainstay"
+edition = "2021"
+license = "Apache-2.0"
+description = "Solana Sealevel eDSL"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+allow-missing-optionals = ["mainstay-derive-accounts/allow-missing-optionals"]
+mainstay-debug = [
+    "mainstay-attribute-access-control/mainstay-debug",
+    "mainstay-attribute-account/mainstay-debug",
+    "mainstay-attribute-constant/mainstay-debug",
+    "mainstay-attribute-error/mainstay-debug",
+    "mainstay-attribute-event/mainstay-debug",
+    "mainstay-attribute-program/mainstay-debug",
+    "mainstay-derive-accounts/mainstay-debug"
+]
+derive = []
+event-cpi = ["mainstay-attribute-event/event-cpi"]
+idl-build = [
+    "mainstay-attribute-account/idl-build",
+    "mainstay-attribute-constant/idl-build",
+    "mainstay-attribute-event/idl-build",
+    "mainstay-attribute-error/idl-build",
+    "mainstay-attribute-program/idl-build",
+    "mainstay-derive-accounts/idl-build",
+    "mainstay-derive-serde/idl-build",
+    "mainstay-lang-idl/build",
+]
+init-if-needed = ["mainstay-derive-accounts/init-if-needed"]
+interface-instructions = ["mainstay-attribute-program/interface-instructions"]
+
+[dependencies]
+mainstay-attribute-access-control = { path = "./attribute/access-control", version = "0.30.0" }
+mainstay-attribute-account = { path = "./attribute/account", version = "0.30.0" }
+mainstay-attribute-constant = { path = "./attribute/constant", version = "0.30.0" }
+mainstay-attribute-error = { path = "./attribute/error", version = "0.30.0" }
+mainstay-attribute-event = { path = "./attribute/event", version = "0.30.0" }
+mainstay-attribute-program = { path = "./attribute/program", version = "0.30.0" }
+mainstay-derive-accounts = { path = "./derive/accounts", version = "0.30.0" }
+mainstay-derive-serde = { path = "./derive/serde", version = "0.30.0" }
+mainstay-derive-space = { path = "./derive/space", version = "0.30.0" }
+
+# `mainstay-lang-idl` should only be included with `idl-build` feature
+mainstay-lang-idl = { path = "../idl", version = "0.1.0", optional = true }
+
+arrayref = "0.3"
+base64 = "0.21"
+bincode = "1"
+borsh = ">=0.9, <0.11"
+bytemuck = "1"
+solana-program = "1.17.3"
+thiserror = "1"
+# TODO: Remove. This crate has been added to fix a build error with the 1.16.0 release.
+getrandom = { version = "0.2", features = ["custom"] }
