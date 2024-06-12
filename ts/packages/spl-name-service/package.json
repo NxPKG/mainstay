@@ -2,7 +2,7 @@
   "name": "@nx-pkg/spl-name-service",
   "description": "Mainstay client for Solana Program Library Name Service",
   "version": "0.2.0",
-  "author": "acheron <acheroncrypto@gmail.com>",
+  "author": "nxpkg <iconmamundentist@gmail.com>",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@nx-pkg/mainstay": "=0.30.0",
-    "@native-to-mainstay/buffer-layout": "=0.1.0"
+    "@native-to-anchor/buffer-layout": "=0.1.0"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "=21.0.2",

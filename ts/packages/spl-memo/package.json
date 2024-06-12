@@ -2,7 +2,7 @@
   "name": "@nx-pkg/spl-memo",
   "description": "Mainstay client for Solana Program Library Memo",
   "version": "3.0.1",
-  "author": "acheron <acheroncrypto@gmail.com>",
+  "author": "nxpkg <iconmamundentist@gmail.com>",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
