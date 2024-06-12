@@ -526,7 +526,7 @@ export async function stakePoolTests() {
   // await program.methods.createTokenMetadata(
   //   "nxpkg",
   //   "ACH",
-  //   "https://github.com/iconmamundentist"
+  //   "https://github.com/nxpkg"
   // ).accounts({
   //   stakePool: stakePoolPk,
   //   manager: kp.publicKey,
