@@ -1,6 +1,7 @@
 name: No Caching Tests
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
