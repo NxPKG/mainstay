@@ -7,9 +7,9 @@ use reqwest::StatusCode;
 use semver::{Prerelease, Version};
 use serde::{de, Deserialize};
 use std::fs;
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::path::PathBuf;
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 
 /// Storage directory for AVM, customizable by setting the $AVM_HOME, defaults to ~/.avm
 pub static AVM_HOME: Lazy<PathBuf> = Lazy::new(|| {
@@ -80,16 +80,16 @@ pub fn use_version(opt_version: Option<Version>) -> Result<()> {
     // Make sure the requested version is installed
     let installed_versions = read_installed_versions()?;
     if !installed_versions.contains(&version) {
-        if let Ok(current) = current_version() {
-            println!("Version {version} is not installed, staying on version {current}.");
-        } else {
-            println!("Version {version} is not installed, no current version.");
-        }
-
-        return Err(anyhow!(
-            "You need to run 'avm install {}' to install it before using it.",
-            version
-        ));
+        println!("Version {version} is not installed. Would you like to install? [y/n]");
+        let input = std::io::stdin()
+            .lock()
+            .lines()
+            .next()
+            .expect("Expected input")?;
+        match input.as_str() {
+            "y" | "yes" => return install_version(InstallTarget::Version(version), false),
+            _ => return Err(anyhow!("Installation rejected.")),
+        };
     }
 
     let mut current_version_file = fs::File::create(current_version_file_path())?;
@@ -117,9 +117,9 @@ pub fn check_and_get_full_commit(commit: &str) -> Result<String> {
     let client = reqwest::blocking::Client::new();
     let response = client
         .get(format!(
-            "https://api.github.com/repos/nxpkg/mainstay/commits/{commit}"
+            "https://api.github.com/repos/coral-xyz/mainstay/commits/{commit}"
         ))
-        .header(USER_AGENT, "avm https://github.com/nxpkg/mainstay")
+        .header(USER_AGENT, "avm https://github.com/coral-xyz/mainstay")
         .send()?;
 
     if response.status() != StatusCode::OK {
@@ -145,9 +145,9 @@ fn get_mainstay_version_from_commit(commit: &str) -> Result<Version> {
     let client = reqwest::blocking::Client::new();
     let response = client
         .get(format!(
-            "https://raw.githubusercontent.com/nxpkg/mainstay/{commit}/cli/Cargo.toml"
+            "https://raw.githubusercontent.com/coral-xyz/mainstay/{commit}/cli/Cargo.toml"
         ))
-        .header(USER_AGENT, "avm https://github.com/nxpkg/mainstay")
+        .header(USER_AGENT, "avm https://github.com/coral-xyz/mainstay")
         .send()?;
 
     if response.status() != StatusCode::OK {
@@ -169,7 +169,7 @@ pub fn install_version(install_target: InstallTarget, force: bool) -> Result<()>
     let mut args: Vec<String> = vec![
         "install".into(),
         "--git".into(),
-        "https://github.com/nxpkg/mainstay".into(),
+        "https://github.com/coral-xyz/mainstay".into(),
         "mainstay-cli".into(),
         "--locked".into(),
         "--root".into(),
@@ -193,22 +193,54 @@ pub fn install_version(install_target: InstallTarget, force: bool) -> Result<()>
         return Ok(());
     }
 
-    let exit = std::process::Command::new("cargo")
+    // If the version is older than v0.31, install using `rustc 1.79.0` to get around the problem
+    // explained in https://github.com/coral-xyz/mainstay/pull/3143
+    if version < Version::parse("0.31.0")? {
+        const REQUIRED_VERSION: &str = "1.79.0";
+        let is_installed = Command::new("rustup")
+            .args(["toolchain", "list"])
+            .output()
+            .map(|output| String::from_utf8(output.stdout))??
+            .lines()
+            .any(|line| line.starts_with(REQUIRED_VERSION));
+        if !is_installed {
+            let exit_status = Command::new("rustup")
+                .args(["toolchain", "install", REQUIRED_VERSION])
+                .spawn()?
+                .wait()?;
+            if !exit_status.success() {
+                return Err(anyhow!(
+                    "Installation of `rustc {REQUIRED_VERSION}` failed. \
+                    `rustc <1.80` is required to install Mainstay v{version} from source. \
+                    See https://github.com/coral-xyz/mainstay/pull/3143 for more information."
+                ));
+            }
+        }
+
+        // Prepend the toolchain to use with the `cargo install` command
+        args.insert(0, format!("+{REQUIRED_VERSION}"));
+    }
+
+    let output = Command::new("cargo")
         .args(args)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .output()
-        .map_err(|e| anyhow!("Cargo install for {} failed: {}", version, e.to_string()))?;
-    if !exit.status.success() {
+        .map_err(|e| anyhow!("Cargo install for {version} failed: {e}"))?;
+    if !output.status.success() {
         return Err(anyhow!(
-            "Failed to install {}, is it a valid version?",
-            version
+            "Failed to install {version}, is it a valid version?"
         ));
     }
 
     let bin_dir = get_bin_dir_path();
+    let bin_name = if cfg!(target_os = "windows") {
+        "mainstay.exe"
+    } else {
+        "mainstay"
+    };
     fs::rename(
-        bin_dir.join("mainstay"),
+        bin_dir.join(bin_name),
         bin_dir.join(format!("mainstay-{version}")),
     )?;
 
@@ -261,8 +293,8 @@ pub fn fetch_versions() -> Result<Vec<Version>, Error> {
     }
 
     let response = reqwest::blocking::Client::new()
-        .get("https://api.github.com/repos/nxpkg/mainstay/tags")
-        .header(USER_AGENT, "avm https://github.com/nxpkg/mainstay")
+        .get("https://api.github.com/repos/coral-xyz/mainstay/tags")
+        .header(USER_AGENT, "avm https://github.com/coral-xyz/mainstay")
         .send()?;
 
     if response.status().is_success() {
