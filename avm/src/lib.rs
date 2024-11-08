@@ -117,9 +117,9 @@ pub fn check_and_get_full_commit(commit: &str) -> Result<String> {
     let client = reqwest::blocking::Client::new();
     let response = client
         .get(format!(
-            "https://api.github.com/repos/coral-xyz/mainstay/commits/{commit}"
+            "https://api.github.com/repos/nxpkg/mainstay/commits/{commit}"
         ))
-        .header(USER_AGENT, "avm https://github.com/coral-xyz/mainstay")
+        .header(USER_AGENT, "avm https://github.com/nxpkg/mainstay")
         .send()?;
 
     if response.status() != StatusCode::OK {
@@ -145,9 +145,9 @@ fn get_mainstay_version_from_commit(commit: &str) -> Result<Version> {
     let client = reqwest::blocking::Client::new();
     let response = client
         .get(format!(
-            "https://raw.githubusercontent.com/coral-xyz/mainstay/{commit}/cli/Cargo.toml"
+            "https://raw.githubusercontent.com/nxpkg/mainstay/{commit}/cli/Cargo.toml"
         ))
-        .header(USER_AGENT, "avm https://github.com/coral-xyz/mainstay")
+        .header(USER_AGENT, "avm https://github.com/nxpkg/mainstay")
         .send()?;
 
     if response.status() != StatusCode::OK {
@@ -169,7 +169,7 @@ pub fn install_version(install_target: InstallTarget, force: bool) -> Result<()>
     let mut args: Vec<String> = vec![
         "install".into(),
         "--git".into(),
-        "https://github.com/coral-xyz/mainstay".into(),
+        "https://github.com/nxpkg/mainstay".into(),
         "mainstay-cli".into(),
         "--locked".into(),
         "--root".into(),
@@ -194,7 +194,7 @@ pub fn install_version(install_target: InstallTarget, force: bool) -> Result<()>
     }
 
     // If the version is older than v0.31, install using `rustc 1.79.0` to get around the problem
-    // explained in https://github.com/coral-xyz/mainstay/pull/3143
+    // explained in https://github.com/nxpkg/mainstay/pull/3143
     if version < Version::parse("0.31.0")? {
         const REQUIRED_VERSION: &str = "1.79.0";
         let is_installed = Command::new("rustup")
@@ -212,7 +212,7 @@ pub fn install_version(install_target: InstallTarget, force: bool) -> Result<()>
                 return Err(anyhow!(
                     "Installation of `rustc {REQUIRED_VERSION}` failed. \
                     `rustc <1.80` is required to install Mainstay v{version} from source. \
-                    See https://github.com/coral-xyz/mainstay/pull/3143 for more information."
+                    See https://github.com/nxpkg/mainstay/pull/3143 for more information."
                 ));
             }
         }
@@ -293,8 +293,8 @@ pub fn fetch_versions() -> Result<Vec<Version>, Error> {
     }
 
     let response = reqwest::blocking::Client::new()
-        .get("https://api.github.com/repos/coral-xyz/mainstay/tags")
-        .header(USER_AGENT, "avm https://github.com/coral-xyz/mainstay")
+        .get("https://api.github.com/repos/nxpkg/mainstay/tags")
+        .header(USER_AGENT, "avm https://github.com/nxpkg/mainstay")
         .send()?;
 
     if response.status().is_success() {

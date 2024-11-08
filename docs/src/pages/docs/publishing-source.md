@@ -35,8 +35,8 @@ An example `Mainstay.toml` config looks as follows,
 
 ```toml
 [toolchain]
-mainstay_version = "0.30.0"
-solana_version = "1.18.8"
+mainstay_version = "0.30.1"
+solana_version = "1.18.17"
 
 [workspace]
 members = ["programs/multisig"]

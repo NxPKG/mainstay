@@ -28,6 +28,7 @@ SUBCOMMANDS:
     help       Prints this message or the help of the given subcommand(s)
     idl        Commands for interacting with interface definitions
     init       Initializes a workspace
+    keys       Program keypair commands
     migrate    Runs the deploy migration script
     new        Creates a new program
     shell      Starts a node shell with an Mainstay client setup according to the local config
@@ -124,6 +125,14 @@ It's recommended to use these commands to store an IDL on chain, at a determinis
 address, as a function of nothing but the program's ID. This
 allows us to generate clients for a program using nothing but the program ID.
 
+### Idl Build
+
+```shell
+mainstay idl build
+```
+
+Generates the IDL for the program using the compilation method.
+
 ### Idl Init
 
 ```shell
@@ -195,6 +204,26 @@ Initializes a project workspace with the following structure.
 - `app/`: Directory for your application frontend.
 - `tests/`: Directory for JavaScript integration tests.
 - `migrations/deploy.js`: Deploy script.
+
+## Keys
+
+Program keypair commands.
+
+### Keys List
+
+```shell
+mainstay keys list
+```
+
+List all of the program keys.
+
+### Keys Sync
+
+```shell
+mainstay keys sync
+```
+
+Sync program `declare_id!` pubkeys with the program's actual pubkey.
 
 ## Migrate
 

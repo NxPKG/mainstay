@@ -2,7 +2,7 @@
 // single deploy script that's invoked from the CLI, injecting a provider
 // configured from the workspace's Mainstay.toml.
 
-const mainstay = require("@nx-pkg/mainstay");
+const mainstay = require("@project-serum/mainstay");
 
 module.exports = async function (provider) {
   // Configure client to use the provider.

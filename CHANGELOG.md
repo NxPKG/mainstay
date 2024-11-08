@@ -12,6 +12,14 @@ The minor version will be incremented upon a breaking change and the patch versi
 
 ### Features
 
+### Fixes
+
+### Breaking
+
+## [0.30.3] - 2024-11-08
+
+### Features
+
 - idl: Allow overriding the idl build toolchain with the `RUSTUP_TOOLCHAIN` environment variable ([#2941](https://github.com/nxpkg/mainstay/pull/2941])).
 - avm: Support customizing the installation location using `AVM_HOME` environment variable ([#2917](https://github.com/nxpkg/mainstay/pull/2917)).
 - avm: Optimize `avm list` when GitHub API rate limits are reached ([#2962](https://github.com/nxpkg/mainstay/pull/2962))

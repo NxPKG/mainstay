@@ -8,6 +8,55 @@ The minor version will be incremented upon a breaking change and the patch versi
 
 ---
 
+## [0.30.1] - 2024-06-20
+
+### Features
+
+- idl: Allow overriding the idl build toolchain with the `RUSTUP_TOOLCHAIN` environment variable ([#2941](https://github.com/nxpkg/mainstay/pull/2941])).
+- avm: Support customizing the installation location using `AVM_HOME` environment variable ([#2917](https://github.com/nxpkg/mainstay/pull/2917)).
+- avm: Optimize `avm list` when GitHub API rate limits are reached ([#2962](https://github.com/nxpkg/mainstay/pull/2962))
+- idl, ts: Add accounts resolution for associated token accounts ([#2927](https://github.com/nxpkg/mainstay/pull/2927)).
+- cli: Add `--no-install` option to the `init` command ([#2945](https://github.com/nxpkg/mainstay/pull/2945)).
+- lang: Implement `TryFromIntError` for `Error` to be able to propagate integer conversion errors ([#2950](https://github.com/nxpkg/mainstay/pull/2950)).
+- idl: Add ability to convert legacy IDLs ([#2986](https://github.com/nxpkg/mainstay/pull/2986)).
+- ts: Extract Mainstay error codes into their own package ([#2983](https://github.com/nxpkg/mainstay/pull/2983)).
+- cli: Add additional solana arguments to the `upgrade` command ([#2998](https://github.com/nxpkg/mainstay/pull/2998)).
+- spl: Export `spl-associated-token-account` crate ([#2999](https://github.com/nxpkg/mainstay/pull/2999)).
+- lang: Support legacy IDLs with `declare_program!` ([#2997](https://github.com/nxpkg/mainstay/pull/2997)).
+- cli: Add `idl convert` command ([#3009](https://github.com/nxpkg/mainstay/pull/3009)).
+- cli: Add `idl type` command ([#3017](https://github.com/nxpkg/mainstay/pull/3017)).
+- lang: Add `mainstay_lang::pubkey` macro for declaring `Pubkey` const values ([#3021](https://github.com/nxpkg/mainstay/pull/3021)).
+- cli: Sync program ids on the initial build ([#3023](https://github.com/nxpkg/mainstay/pull/3023)).
+- idl: Remove `mainstay-syn` dependency ([#3030](https://github.com/nxpkg/mainstay/pull/3030)).
+- lang: Add `const` of program ID to `declare_id!` and `declare_program!` ([#3019](https://github.com/nxpkg/mainstay/pull/3019)).
+- idl: Add separate spec crate ([#3036](https://github.com/nxpkg/mainstay/pull/3036)).
+
+### Fixes
+
+- lang: Eliminate variable allocations that build up stack space for token extension code generation ([#2913](https://github.com/nxpkg/mainstay/pull/2913)).
+- ts: Fix incorrect `maxSupportedTransactionVersion` in `MainstayProvider.send*()` methods ([#2922](https://github.com/nxpkg/mainstay/pull/2922)).
+- cli: Use npm's configured default license for new projects made with `mainstay init` ([#2929](https://github.com/nxpkg/mainstay/pull/2929)).
+- cli: add filename to 'Unable to read keypair file' errors ([#2932](https://github.com/nxpkg/mainstay/pull/2932)).
+- idl: Fix path resolution of the `Cargo.lock` of the project when generating idls for external types ([#2946](https://github.com/nxpkg/mainstay/pull/2946)).
+- idl: Fix potential panic on external type resolution ([#2954](https://github.com/nxpkg/mainstay/pull/2954)).
+- lang: Fix using defined types in instruction parameters with `declare_program!` ([#2959](https://github.com/nxpkg/mainstay/pull/2959)).
+- lang: Fix using const generics with `declare_program!` ([#2965](https://github.com/nxpkg/mainstay/pull/2965)).
+- lang: Fix using `Vec<u8>` type with `declare_program!` ([#2966](https://github.com/nxpkg/mainstay/pull/2966)).
+- lang: Fix `ProgramError::ArithmeticOverflow` not found error ([#2975](https://github.com/nxpkg/mainstay/pull/2975)).
+- lang: Fix using optional accounts with `declare_program!` ([#2967](https://github.com/nxpkg/mainstay/pull/2967)).
+- lang: Fix instruction return type generation with `declare_program!` ([#2977](https://github.com/nxpkg/mainstay/pull/2977)).
+- cli: Fix IDL write getting corrupted from retries ([#2964](https://github.com/nxpkg/mainstay/pull/2964)).
+- idl: Fix `unexpected_cfgs` build warning ([#2992](https://github.com/nxpkg/mainstay/pull/2992)).
+- lang: Make tuple struct fields public in `declare_program!` ([#2994](https://github.com/nxpkg/mainstay/pull/2994)).
+- Remove `rust-version` from crate manifests ([#3000](https://github.com/nxpkg/mainstay/pull/3000)).
+- cli: Fix upgradeable program clones ([#3010](https://github.com/nxpkg/mainstay/pull/3010)).
+- ts: Fix using IDLs that have defined types as generic arguments ([#3016](https://github.com/nxpkg/mainstay/pull/3016)).
+- idl: Fix generation with unsupported expressions ([#3033](https://github.com/nxpkg/mainstay/pull/3033)).
+- idl: Fix using `address` constraint with field expressions ([#3034](https://github.com/nxpkg/mainstay/pull/3034)).
+- lang: Fix using `bytemuckunsafe` account serialization with `declare_program!` ([#3037](https://github.com/nxpkg/mainstay/pull/3037)).
+
+### Breaking
+
 ## [0.30.0] - 2024-04-15
 
 ### Features
@@ -268,7 +317,7 @@ The minor version will be incremented upon a breaking change and the patch versi
 - lang: Add `Discriminator` and `Owner` trait implementation for structures representing instructions ([#1997](https://github.com/nxpkg/mainstay/pull/1997)).
 - ts: '@nx-pkg/borsh' package is now part of the yarn monorepo ([#2290](https://github.com/nxpkg/mainstay/pull/2290)). The borsh package needs to be built before the mainstay package can be built but this should happen automatically when running `yarn build` in packages/mainstay, see [#2299](https://github.com/nxpkg/mainstay/pull/2299) and [#2306](https://github.com/nxpkg/mainstay/pull/2306).
 - lang: Add support for optionally passing in accounts using the syntax `Optional<Account<'info, T>>`. Shouldn't affect existing programs but may be a breaking change to tools that use the mainstay generated IDL. [#2101](https://github.com/nxpkg/mainstay/pull/2101).
-- ts: Switch from `@nx-pkg/mainstay` to the `@nx-pkg/mainstay` package [#2318](https://github.com/nxpkg/mainstay/pull/2318).
+- ts: Switch from `@project-serum/mainstay` to the `@nx-pkg/mainstay` package [#2318](https://github.com/nxpkg/mainstay/pull/2318).
 
 ## [0.25.0] - 2022-07-05
 
@@ -519,7 +568,7 @@ The minor version will be incremented upon a breaking change and the patch versi
 
 - cli: fix dns in NODE_OPTIONS ([#928](https://github.com/nxpkg/mainstay/pull/928)).
 - cli: output TypeScript IDL in `idl parse` subcommand ([#941](https://github.com/nxpkg/mainstay/pull/941)).
-- cli: Add fields `os` and `cpu` to npm package `@nx-pkg/mainstay-cli` ([#976](https://github.com/nxpkg/mainstay/pull/976)).
+- cli: Add fields `os` and `cpu` to npm package `@project-serum/mainstay-cli` ([#976](https://github.com/nxpkg/mainstay/pull/976)).
 - cli: Allow specify output directory for TypeScript IDL ([#940](https://github.com/nxpkg/mainstay/pull/940)).
 
 ### Breaking
@@ -898,5 +947,5 @@ Initial release.
 - lang/syn: Internal crate for parsing the Mainstay eDSL, generating code, and an IDL.
 - spl: `mainstay-spl` crate providing CPI clients for Mainstay programs.
 - client: `mainstay-client` crate providing Rust clients for Mainstay programs.
-- ts: `@nx-pkg/mainstay` package for generating TypeScript clients.
+- ts: `@project-serum/mainstay` package for generating TypeScript clients.
 - cli: Command line interface for managing Mainstay programs.

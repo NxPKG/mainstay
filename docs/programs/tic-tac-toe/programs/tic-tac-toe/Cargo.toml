@@ -9,13 +9,14 @@ crate-type = ["cdylib", "lib"]
 name = "tic_tac_toe"
 
 [features]
+default = []
+cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
-cpi = ["no-entrypoint"]
-default = []
+idl-build = ["mainstay-lang/idl-build"]
 
 [dependencies]
-mainstay-lang = "=0.30.0"
+mainstay-lang = "=0.30.1"
 num-traits = "0.2"
 num-derive = "0.3"

@@ -111,7 +111,7 @@ Add constraints to an account with the following format:
 pub account: AccountType
 ```
 
-Some constraints support custom Errors (we will explore errors [later](./errors.md)):
+Some constraints support custom Errors (we will explore errors [later](./errors)):
 
 ```rust
 #[account(...,<constraint> @ MyError::MyErrorVariant, ...)]
@@ -138,7 +138,7 @@ You can find information about all constraints in the reference. We will cover s
 
 ## Safety checks
 
-Two of the Mainstay account types, [AccountInfo](https://docs.rs/mainstay-lang/latest/mainstay_lang/accounts/account_info/index.html) and [UncheckedAccount](https://docs.rs/mainstay-lang/latest/mainstay_lang/accounts/unchecked_account/index.html) do not implement any checks on the account being passed. Mainstay implements safety checks that encourage additional documentation describing why additional checks are not necesssary.
+Two of the Mainstay account types, [AccountInfo](https://docs.rs/mainstay-lang/latest/mainstay_lang/accounts/account_info/index.html) and [UncheckedAccount](https://docs.rs/mainstay-lang/latest/mainstay_lang/accounts/unchecked_account/index.html) do not implement any checks on the account being passed. Mainstay implements safety checks that encourage additional documentation describing why additional checks are not necessary.
 
 Attempting to build a program containing the following excerpt with `mainstay build`:
 
