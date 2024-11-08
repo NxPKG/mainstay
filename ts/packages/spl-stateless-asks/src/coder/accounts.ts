@@ -1,5 +1,5 @@
 // @ts-nocheck
-import * as B from "@native-to-anchor/buffer-layout";
+import * as B from "@native-to-mainstay/buffer-layout";
 import { AccountsCoder, Idl } from "@nx-pkg/mainstay";
 import { IdlTypeDef } from "@nx-pkg/mainstay/dist/cjs/idl";
 

@@ -1,6 +1,6 @@
 {
     "dependencies": {
-        "@project-serum/mainstay": "0.24.1"
+        "@nx-pkg/mainstay": "0.24.1"
     },
     "devDependencies": {
         "@types/chai": "^4.3.0",
