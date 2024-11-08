@@ -1,6 +1,6 @@
 [package]
 name = "mainstay-syn"
-version = "0.30.1"
+version = "0.30.2"
 authors = ["Mainstay Maintainers <dev.sulaiman@icloud.com>"]
 repository = "https://github.com/nxpkg/mainstay"
 license = "Apache-2.0"
