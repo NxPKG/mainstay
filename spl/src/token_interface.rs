@@ -1,10 +1,8 @@
+use mainstay_lang::__private::bytemuck::Pod;
 use mainstay_lang::solana_program::program_pack::Pack;
 use mainstay_lang::solana_program::pubkey::Pubkey;
 use spl_token_2022::extension::ExtensionType;
-use spl_token_2022::{
-    extension::{BaseStateWithExtensions, Extension, StateWithExtensions},
-    solana_zk_token_sdk::instruction::Pod,
-};
+use spl_token_2022::extension::{BaseStateWithExtensions, Extension, StateWithExtensions};
 use std::ops::Deref;
 
 pub use crate::token_2022::*;

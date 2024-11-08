@@ -1,4 +1,4 @@
-use crate::{get_keypair, is_hidden};
+use crate::{get_keypair, is_hidden, keys_sync};
 use mainstay_client::Cluster;
 use mainstay_lang_idl::types::Idl;
 use anyhow::{anyhow, bail, Context, Error, Result};
@@ -9,6 +9,7 @@ use reqwest::Url;
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use solana_cli_config::{Config as SolanaConfig, CONFIG_FILE};
+use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
 use solang_parser::pt::{ContractTy, SourceUnitPart};
@@ -242,7 +243,10 @@ impl WithPath<Config> {
             let cargo = Manifest::from_path(path.join("Cargo.toml"))?;
             let lib_name = cargo.lib_name()?;
 
-            let idl_filepath = format!("target/idl/{lib_name}.json");
+            let idl_filepath = Path::new("target")
+                .join("idl")
+                .join(&lib_name)
+                .with_extension("json");
             let idl = fs::read(idl_filepath)
                 .ok()
                 .map(|bytes| serde_json::from_reader(&*bytes))
@@ -256,7 +260,10 @@ impl WithPath<Config> {
             });
         }
         for (lib_name, path) in self.get_solidity_program_list()? {
-            let idl_filepath = format!("target/idl/{lib_name}.json");
+            let idl_filepath = Path::new("target")
+                .join("idl")
+                .join(&lib_name)
+                .with_extension("json");
             let idl = fs::read(idl_filepath)
                 .ok()
                 .map(|bytes| serde_json::from_reader(&*bytes))
@@ -373,6 +380,31 @@ pub struct Config {
 pub struct ToolchainConfig {
     pub mainstay_version: Option<String>,
     pub solana_version: Option<String>,
+    pub package_manager: Option<PackageManager>,
+}
+
+/// Package manager to use for the project.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Parser, ValueEnum, Serialize, Deserialize)]
+pub enum PackageManager {
+    /// Use npm as the package manager.
+    NPM,
+    /// Use yarn as the package manager.
+    #[default]
+    Yarn,
+    /// Use pnpm as the package manager.
+    PNPM,
+}
+
+impl std::fmt::Display for PackageManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let pkg_manager_str = match self {
+            PackageManager::NPM => "npm",
+            PackageManager::Yarn => "yarn",
+            PackageManager::PNPM => "pnpm",
+        };
+
+        write!(f, "{pkg_manager_str}")
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -512,7 +544,16 @@ impl Config {
                     .path();
                 if let Some(filename) = p.file_name() {
                     if filename.to_str() == Some("Mainstay.toml") {
-                        let cfg = Config::from_path(&p)?;
+                        // Make sure the program id is correct (only on the initial build)
+                        let mut cfg = Config::from_path(&p)?;
+                        let deploy_dir = p.parent().unwrap().join("target").join("deploy");
+                        if !deploy_dir.exists() && !cfg.programs.contains_key(&Cluster::Localnet) {
+                            println!("Updating program ids...");
+                            fs::create_dir_all(deploy_dir)?;
+                            keys_sync(&ConfigOverride::default(), None)?;
+                            cfg = Config::from_path(&p)?;
+                        }
+
                         return Ok(Some(WithPath::new(cfg, p)));
                     }
                 }
@@ -1058,7 +1099,7 @@ pub struct _Validator {
     pub ticks_per_slot: Option<u16>,
     // Warp the ledger to WARP_SLOT after starting the validator.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub warp_slot: Option<String>,
+    pub warp_slot: Option<Slot>,
     // Deactivate one or more features.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deactivate_feature: Option<Vec<String>>,
@@ -1096,7 +1137,7 @@ pub struct Validator {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ticks_per_slot: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub warp_slot: Option<String>,
+    pub warp_slot: Option<Slot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deactivate_feature: Option<Vec<String>>,
 }
@@ -1119,7 +1160,7 @@ impl From<_Validator> for Validator {
             url: _validator.url,
             ledger: _validator
                 .ledger
-                .unwrap_or_else(|| DEFAULT_LEDGER_PATH.to_string()),
+                .unwrap_or_else(|| get_default_ledger_path().display().to_string()),
             limit_ledger_size: _validator.limit_ledger_size,
             rpc_port: _validator
                 .rpc_port
@@ -1157,7 +1198,10 @@ impl From<Validator> for _Validator {
     }
 }
 
-pub const DEFAULT_LEDGER_PATH: &str = ".mainstay/test-ledger";
+pub fn get_default_ledger_path() -> PathBuf {
+    Path::new(".mainstay").join("test-ledger")
+}
+
 const DEFAULT_BIND_ADDRESS: &str = "0.0.0.0";
 
 impl Merge for _Validator {
@@ -1270,12 +1314,12 @@ impl Program {
 
     // Lazily initializes the keypair file with a new key if it doesn't exist.
     pub fn keypair_file(&self) -> Result<WithPath<File>> {
-        let deploy_dir_path = "target/deploy/";
-        fs::create_dir_all(deploy_dir_path)
-            .with_context(|| format!("Error creating directory with path: {deploy_dir_path}"))?;
+        let deploy_dir_path = Path::new("target").join("deploy");
+        fs::create_dir_all(&deploy_dir_path)
+            .with_context(|| format!("Error creating directory with path: {deploy_dir_path:?}"))?;
         let path = std::env::current_dir()
             .expect("Must have current dir")
-            .join(format!("target/deploy/{}-keypair.json", self.lib_name));
+            .join(deploy_dir_path.join(format!("{}-keypair.json", self.lib_name)));
         if path.exists() {
             return Ok(WithPath::new(
                 File::open(&path)
@@ -1291,11 +1335,10 @@ impl Program {
     }
 
     pub fn binary_path(&self, verifiable: bool) -> PathBuf {
-        let path = if verifiable {
-            format!("target/verifiable/{}.so", self.lib_name)
-        } else {
-            format!("target/deploy/{}.so", self.lib_name)
-        };
+        let path = Path::new("target")
+            .join(if verifiable { "verifiable" } else { "deploy" })
+            .join(&self.lib_name)
+            .with_extension("so");
 
         std::env::current_dir()
             .expect("Must have current dir")
@@ -1377,7 +1420,13 @@ macro_rules! home_path {
 
         impl Default for $my_struct {
             fn default() -> Self {
-                $my_struct(home_dir().unwrap().join($path).display().to_string())
+                $my_struct(
+                    home_dir()
+                        .unwrap()
+                        .join($path.replace('/', std::path::MAIN_SEPARATOR_STR))
+                        .display()
+                        .to_string(),
+                )
             }
         }
 

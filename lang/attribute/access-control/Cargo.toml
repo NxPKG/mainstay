@@ -1,7 +1,7 @@
 [package]
 name = "mainstay-attribute-access-control"
-version = "0.30.0"
-authors = ["Mainstay Maintainers <accounts@200ms.io>"]
+version = "0.30.1"
+authors = ["Mainstay Maintainers <dev.sulaiman@icloud.com>"]
 repository = "https://github.com/nxpkg/mainstay"
 license = "Apache-2.0"
 description = "Mainstay attribute macro for instruction access control"
@@ -14,7 +14,7 @@ proc-macro = true
 mainstay-debug = ["mainstay-syn/mainstay-debug"]
 
 [dependencies]
-mainstay-syn = { path = "../../syn", version = "0.30.0" }
+mainstay-syn = { path = "../../syn", version = "0.30.1" }
 proc-macro2 = "1"
 quote = "1"
 syn = { version = "1", features = ["full"] }

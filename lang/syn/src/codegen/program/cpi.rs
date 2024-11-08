@@ -1,4 +1,6 @@
-use crate::codegen::program::common::{generate_ix_variant, sighash, SIGHASH_GLOBAL_NAMESPACE};
+use crate::codegen::program::common::{
+    gen_discriminator, generate_ix_variant, SIGHASH_GLOBAL_NAMESPACE,
+};
 use crate::Program;
 use heck::SnakeCase;
 use quote::{quote, ToTokens};
@@ -11,14 +13,13 @@ pub fn generate(program: &Program) -> proc_macro2::TokenStream {
         .map(|ix| {
             let accounts_ident: proc_macro2::TokenStream = format!("crate::cpi::accounts::{}", &ix.mainstay_ident.to_string()).parse().unwrap();
             let cpi_method = {
-                let ix_variant = generate_ix_variant(ix.raw_method.sig.ident.to_string(), &ix.args);
+                let name = &ix.raw_method.sig.ident;
+                let ix_variant = generate_ix_variant(name.to_string(), &ix.args);
                 let method_name = &ix.ident;
                 let args: Vec<&syn::PatType> = ix.args.iter().map(|arg| &arg.raw_arg).collect();
-                let name = &ix.raw_method.sig.ident.to_string();
-                let sighash_arr = sighash(SIGHASH_GLOBAL_NAMESPACE, name);
-                let sighash_tts: proc_macro2::TokenStream =
-                    format!("{sighash_arr:?}").parse().unwrap();
+                let discriminator = gen_discriminator(SIGHASH_GLOBAL_NAMESPACE, name);
                 let ret_type = &ix.returns.ty.to_token_stream();
+                let ix_cfgs = &ix.cfgs;
                 let (method_ret, maybe_return) = match ret_type.to_string().as_str() {
                     "()" => (quote! {mainstay_lang::Result<()> }, quote! { Ok(()) }),
                     _ => (
@@ -28,6 +29,7 @@ pub fn generate(program: &Program) -> proc_macro2::TokenStream {
                 };
 
                 quote! {
+                    #(#ix_cfgs)*
                     pub fn #method_name<'a, 'b, 'c, 'info>(
                         ctx: mainstay_lang::context::CpiContext<'a, 'b, 'c, 'info, #accounts_ident<'info>>,
                         #(#args),*
@@ -35,7 +37,7 @@ pub fn generate(program: &Program) -> proc_macro2::TokenStream {
                         let ix = {
                             let ix = instruction::#ix_variant;
                             let mut data = Vec::with_capacity(256);
-                            data.extend_from_slice(&#sighash_tts);
+                            data.extend_from_slice(#discriminator);
                             MainstaySerialize::serialize(&ix, &mut data)
                                 .map_err(|_| mainstay_lang::error::ErrorCode::InstructionDidNotSerialize)?;
                             let accounts = ctx.to_account_metas(None);
@@ -91,7 +93,7 @@ pub fn generate(program: &Program) -> proc_macro2::TokenStream {
 }
 
 pub fn generate_accounts(program: &Program) -> proc_macro2::TokenStream {
-    let mut accounts = std::collections::HashSet::new();
+    let mut accounts = std::collections::HashMap::new();
 
     // Go through instruction accounts.
     for ix in &program.ixs {
@@ -101,15 +103,17 @@ pub fn generate_accounts(program: &Program) -> proc_macro2::TokenStream {
             "__cpi_client_accounts_{}",
             mainstay_ident.to_string().to_snake_case()
         );
-        accounts.insert(macro_name);
+        let cfgs = &ix.cfgs;
+        accounts.insert(macro_name, cfgs.as_slice());
     }
 
     // Build the tokens from all accounts
     let account_structs: Vec<proc_macro2::TokenStream> = accounts
         .iter()
-        .map(|macro_name: &String| {
+        .map(|(macro_name, cfgs)| {
             let macro_name: proc_macro2::TokenStream = macro_name.parse().unwrap();
             quote! {
+                #(#cfgs)*
                 pub use crate::#macro_name::*;
             }
         })
