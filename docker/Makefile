@@ -2,11 +2,11 @@ WORKDIR=$(PWD)
 #
 # Mainstay version.
 #
-MAINSTAY_CLI=v0.30.0
+MAINSTAY_CLI=v0.30.1
 #
 # Solana toolchain.
 #
-SOLANA_CLI=v1.18.8
+SOLANA_CLI=v2.0.8
 #
 # Build version should match the Mainstay cli version.
 #

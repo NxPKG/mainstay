@@ -524,9 +524,9 @@ export async function stakePoolTests() {
   // TODO: this should work but it's not tested
   // async function createTokenMetadata() {
   // await program.methods.createTokenMetadata(
-  //   "nxpkg",
+  //   "acheron",
   //   "ACH",
-  //   "https://github.com/nxpkg"
+  //   "https://github.com/acheroncrypto"
   // ).accounts({
   //   stakePool: stakePoolPk,
   //   manager: kp.publicKey,
@@ -542,9 +542,9 @@ export async function stakePoolTests() {
   // TODO: this should work but it's not tested
   // async function updateTokenMetadata() {
   // await program.methods.updateTokenMetadata(
-  //   "nxpkg",
+  //   "acheron",
   //   "ACH",
-  //   "https://twitter.com/iconmamundentist"
+  //   "https://twitter.com/acheroncrypto"
   // ).accounts({
   //   stakePool: stakePoolPk,
   //   manager: kp.publicKey,

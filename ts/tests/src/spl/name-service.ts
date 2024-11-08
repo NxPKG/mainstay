@@ -22,7 +22,7 @@ export async function nameServiceTests() {
 
   const PREFIX = "SPL Name Service";
   const NAME = "mainstay" + Math.floor(Math.random() * 1000);
-  const UPDATE_NAME = "nxpkg";
+  const UPDATE_NAME = "acheron";
 
   const newOwnerKp = new Keypair();
   let nameAccountPk: PublicKey;

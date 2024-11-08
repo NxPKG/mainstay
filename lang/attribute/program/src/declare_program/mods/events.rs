@@ -16,7 +16,6 @@ pub fn gen_events_mod(idl: &Idl) -> proc_macro2::TokenStream {
             .expect("Type must exist");
 
         quote! {
-            #[derive(mainstay_lang::__private::EventIndex)]
             #ty_def
 
             impl mainstay_lang::Event for #name {
@@ -29,7 +28,7 @@ pub fn gen_events_mod(idl: &Idl) -> proc_macro2::TokenStream {
             }
 
             impl mainstay_lang::Discriminator for #name {
-                const DISCRIMINATOR: [u8; 8] = #discriminator;
+                const DISCRIMINATOR: &'static [u8] = &#discriminator;
             }
         }
     });

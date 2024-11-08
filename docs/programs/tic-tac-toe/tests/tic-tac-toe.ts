@@ -1,5 +1,5 @@
-import * as mainstay from '@project-serum/mainstay';
-import { MainstayError, Program } from '@project-serum/mainstay';
+import * as mainstay from '@nx-pkg/mainstay';
+import { MainstayError, Program } from '@nx-pkg/mainstay';
 import { TicTacToe } from '../target/types/tic_tac_toe';
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';

@@ -2,7 +2,7 @@
   "name": "@nx-pkg/spl-binary-oracle-pair",
   "description": "Mainstay client for Solana Program Library Binary Oracle Pair",
   "version": "0.1.0",
-  "author": "nxpkg <iconmamundentist@gmail.com>",
+  "author": "acheron <acheroncrypto@gmail.com>",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -27,8 +27,8 @@
     "watch": "tsc -p tsconfig.cjs.json --watch"
   },
   "dependencies": {
-    "@nx-pkg/mainstay": "=0.30.0",
-    "@native-to-anchor/buffer-layout": "=0.1.0"
+    "@nx-pkg/mainstay": "=0.30.1",
+    "@native-to-mainstay/buffer-layout": "=0.1.0"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "=21.0.2",

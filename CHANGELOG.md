@@ -313,7 +313,7 @@ See the [Mainstay 0.29 release notes](https://www.mainstay-lang.com/release-note
 - lang: Add `Discriminator` and `Owner` trait implementation for structures representing instructions ([#1997](https://github.com/nxpkg/mainstay/pull/1997)).
 - ts: '@nx-pkg/borsh' package is now part of the yarn monorepo ([#2290](https://github.com/nxpkg/mainstay/pull/2290)). The borsh package needs to be built before the mainstay package can be built but this should happen automatically when running `yarn build` in packages/mainstay, see [#2299](https://github.com/nxpkg/mainstay/pull/2299) and [#2306](https://github.com/nxpkg/mainstay/pull/2306).
 - lang: Add support for optionally passing in accounts using the syntax `Optional<Account<'info, T>>`. Shouldn't affect existing programs but may be a breaking change to tools that use the mainstay generated IDL. [#2101](https://github.com/nxpkg/mainstay/pull/2101).
-- ts: Switch from `@project-serum/mainstay` to the `@nx-pkg/mainstay` package [#2318](https://github.com/nxpkg/mainstay/pull/2318).
+- ts: Switch from `@nx-pkg/mainstay` to the `@nx-pkg/mainstay` package [#2318](https://github.com/nxpkg/mainstay/pull/2318).
 
 ## [0.25.0] - 2022-07-05
 
@@ -564,7 +564,7 @@ See the [Mainstay 0.29 release notes](https://www.mainstay-lang.com/release-note
 
 - cli: fix dns in NODE_OPTIONS ([#928](https://github.com/nxpkg/mainstay/pull/928)).
 - cli: output TypeScript IDL in `idl parse` subcommand ([#941](https://github.com/nxpkg/mainstay/pull/941)).
-- cli: Add fields `os` and `cpu` to npm package `@project-serum/mainstay-cli` ([#976](https://github.com/nxpkg/mainstay/pull/976)).
+- cli: Add fields `os` and `cpu` to npm package `@nx-pkg/mainstay-cli` ([#976](https://github.com/nxpkg/mainstay/pull/976)).
 - cli: Allow specify output directory for TypeScript IDL ([#940](https://github.com/nxpkg/mainstay/pull/940)).
 
 ### Breaking
@@ -943,5 +943,5 @@ Initial release.
 - lang/syn: Internal crate for parsing the Mainstay eDSL, generating code, and an IDL.
 - spl: `mainstay-spl` crate providing CPI clients for Mainstay programs.
 - client: `mainstay-client` crate providing Rust clients for Mainstay programs.
-- ts: `@project-serum/mainstay` package for generating TypeScript clients.
+- ts: `@nx-pkg/mainstay` package for generating TypeScript clients.
 - cli: Command line interface for managing Mainstay programs.

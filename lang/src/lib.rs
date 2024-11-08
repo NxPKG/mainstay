@@ -44,15 +44,18 @@ pub mod event;
 #[doc(hidden)]
 pub mod idl;
 pub mod system_program;
-
 mod vec;
+
+#[cfg(feature = "lazy-account")]
+mod lazy;
+
 pub use crate::bpf_upgradeable_state::*;
 pub use mainstay_attribute_access_control::access_control;
-pub use mainstay_attribute_account::{account, declare_id, zero_copy};
+pub use mainstay_attribute_account::{account, declare_id, pubkey, zero_copy};
 pub use mainstay_attribute_constant::constant;
 pub use mainstay_attribute_error::*;
 pub use mainstay_attribute_event::{emit, event};
-pub use mainstay_attribute_program::{declare_program, program};
+pub use mainstay_attribute_program::{declare_program, instruction, program};
 pub use mainstay_derive_accounts::Accounts;
 pub use mainstay_derive_serde::{MainstayDeserialize, MainstaySerialize};
 pub use mainstay_derive_space::InitSpace;
@@ -193,7 +196,7 @@ pub trait Lamports<'info>: AsRef<AccountInfo<'info>> {
     ///
     /// 1. The account must be marked `mut`.
     /// 2. The total lamports **before** the transaction must equal to total lamports **after**
-    /// the transaction.
+    ///    the transaction.
     /// 3. `lamports` field of the account info should not currently be borrowed.
     ///
     /// See [`Lamports::sub_lamports`] for subtracting lamports.
@@ -214,7 +217,7 @@ pub trait Lamports<'info>: AsRef<AccountInfo<'info>> {
     /// 1. The account must be owned by the executing program.
     /// 2. The account must be marked `mut`.
     /// 3. The total lamports **before** the transaction must equal to total lamports **after**
-    /// the transaction.
+    ///    the transaction.
     /// 4. `lamports` field of the account info should not currently be borrowed.
     ///
     /// See [`Lamports::add_lamports`] for adding lamports.
@@ -273,13 +276,12 @@ pub trait AccountDeserialize: Sized {
 pub trait ZeroCopy: Discriminator + Copy + Clone + Zeroable + Pod {}
 
 /// Calculates the data for an instruction invocation, where the data is
-/// `Sha256(<namespace>:<method_name>)[..8] || BorshSerialize(args)`.
-/// `args` is a borsh serialized struct of named fields for each argument given
-/// to an instruction.
+/// `Discriminator + BorshSerialize(args)`. `args` is a borsh serialized
+/// struct of named fields for each argument given to an instruction.
 pub trait InstructionData: Discriminator + MainstaySerialize {
     fn data(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(256);
-        data.extend_from_slice(&Self::discriminator());
+        data.extend_from_slice(Self::DISCRIMINATOR);
         self.serialize(&mut data).unwrap();
         data
     }
@@ -290,7 +292,7 @@ pub trait InstructionData: Discriminator + MainstaySerialize {
     /// necessary), and because the data field in `Instruction` expects a `Vec<u8>`.
     fn write_to(&self, mut data: &mut Vec<u8>) {
         data.clear();
-        data.extend_from_slice(&Self::DISCRIMINATOR);
+        data.extend_from_slice(Self::DISCRIMINATOR);
         self.serialize(&mut data).unwrap()
     }
 }
@@ -300,20 +302,26 @@ pub trait Event: MainstaySerialize + MainstayDeserialize + Discriminator {
     fn data(&self) -> Vec<u8>;
 }
 
-// The serialized event data to be emitted via a Solana log.
-// TODO: remove this on the next major version upgrade.
-#[doc(hidden)]
-#[deprecated(since = "0.4.2", note = "Please use Event instead")]
-pub trait EventData: MainstaySerialize + Discriminator {
-    fn data(&self) -> Vec<u8>;
-}
-
-/// 8 byte unique identifier for a type.
+/// Unique identifier for a type.
+///
+/// This is not a trait you should derive manually, as various Mainstay macros already derive it
+/// internally.
+///
+/// Prior to Mainstay v0.31, discriminators were always 8 bytes in size. However, starting with Mainstay
+/// v0.31, it is possible to override the default discriminators, and discriminator length is no
+/// longer fixed, which means this trait can also be implemented for non-Mainstay programs.
+///
+/// It's important that the discriminator is always unique for the type you're implementing it
+/// for. While the discriminator can be at any length (including zero), the IDL generation does not
+/// currently allow empty discriminators for safety and convenience reasons. However, the trait
+/// definition still allows empty discriminators because some non-Mainstay programs, e.g. the SPL
+/// Token program, don't have account discriminators. In that case, safety checks should never
+/// depend on the discriminator.
 pub trait Discriminator {
-    const DISCRIMINATOR: [u8; 8];
-    fn discriminator() -> [u8; 8] {
-        Self::DISCRIMINATOR
-    }
+    /// Discriminator slice.
+    ///
+    /// See [`Discriminator`] trait documentation for more information.
+    const DISCRIMINATOR: &'static [u8];
 }
 
 /// Defines the space of an account for initialization.
@@ -400,12 +408,13 @@ pub mod prelude {
         accounts::signer::Signer, accounts::system_account::SystemAccount,
         accounts::sysvar::Sysvar, accounts::unchecked_account::UncheckedAccount, constant,
         context::Context, context::CpiContext, declare_id, declare_program, emit, err, error,
-        event, program, require, require_eq, require_gt, require_gte, require_keys_eq,
-        require_keys_neq, require_neq,
+        event, instruction, program, pubkey, require, require_eq, require_gt, require_gte,
+        require_keys_eq, require_keys_neq, require_neq,
         solana_program::bpf_loader_upgradeable::UpgradeableLoaderState, source,
         system_program::System, zero_copy, AccountDeserialize, AccountSerialize, Accounts,
-        AccountsClose, AccountsExit, MainstayDeserialize, MainstaySerialize, Id, InitSpace, Key,
-        Lamports, Owner, ProgramData, Result, Space, ToAccountInfo, ToAccountInfos, ToAccountMetas,
+        AccountsClose, AccountsExit, MainstayDeserialize, MainstaySerialize, Discriminator, Id,
+        InitSpace, Key, Lamports, Owner, ProgramData, Result, Space, ToAccountInfo, ToAccountInfos,
+        ToAccountMetas,
     };
     pub use mainstay_attribute_error::*;
     pub use borsh;
@@ -434,18 +443,19 @@ pub mod prelude {
 
     #[cfg(feature = "interface-instructions")]
     pub use super::interface;
+
+    #[cfg(feature = "lazy-account")]
+    pub use super::accounts::lazy_account::LazyAccount;
 }
 
 /// Internal module used by macros and unstable apis.
 #[doc(hidden)]
 pub mod __private {
     pub use mainstay_attribute_account::ZeroCopyAccessor;
-
-    pub use mainstay_attribute_event::EventIndex;
-
     pub use base64;
-
     pub use bytemuck;
+
+    pub use crate::{bpf_writer::BpfWriter, common::is_closed};
 
     use solana_program::pubkey::Pubkey;
 
@@ -472,6 +482,11 @@ pub mod __private {
             input.to_bytes()
         }
     }
+
+    #[cfg(feature = "lazy-account")]
+    pub use crate::lazy::Lazy;
+    #[cfg(feature = "lazy-account")]
+    pub use mainstay_derive_serde::Lazy;
 }
 
 /// Ensures a condition is true, otherwise returns with the given error.

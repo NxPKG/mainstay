@@ -1,5 +1,5 @@
 // @ts-nocheck
-import * as B from "@native-to-anchor/buffer-layout";
+import * as B from "@native-to-mainstay/buffer-layout";
 import { Idl, InstructionCoder } from "@nx-pkg/mainstay";
 
 export class SplBinaryOraclePairInstructionCoder implements InstructionCoder {
