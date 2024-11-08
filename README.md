@@ -1,4 +1,4 @@
-<div align="center">
+<div>
   <img height="170x" src="https://pbs.twimg.com/media/FVUVaO9XEAAulvK?format=png&name=small" />
 
   <h1>Mainstay</h1>
@@ -112,7 +112,7 @@ Please see the [CONTRIBUTING.md](./CONTRIBUTING.md) to learn how.
 
 ### Thanks ❤️
 
-<div align="center">
+<div>
   <a href="https://github.com/nxpkg/mainstay/graphs/contributors">
     <img src="https://contrib.rocks/image?repo=nxpkg/mainstay" width="100%" />
   </a>
