@@ -1,5 +1,4 @@
 <div>
-  <img height="170x" src="https://pbs.twimg.com/media/FVUVaO9XEAAulvK?format=png&name=small" />
 
   <h1>Mainstay</h1>
 
