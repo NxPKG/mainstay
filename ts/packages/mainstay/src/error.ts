@@ -93,8 +93,12 @@ export class MainstayError extends Error {
       // <Pubkey>
       if (logs[mainstayErrorLogIndex + 1] === "Program log: Left:") {
         const pubkeyRegex = /^Program log: (.*)$/;
-        const leftPubkey = pubkeyRegex.exec(logs[mainstayErrorLogIndex + 2])![1];
-        const rightPubkey = pubkeyRegex.exec(logs[mainstayErrorLogIndex + 4])![1];
+        const leftPubkey = pubkeyRegex.exec(
+          logs[mainstayErrorLogIndex + 2]
+        )![1];
+        const rightPubkey = pubkeyRegex.exec(
+          logs[mainstayErrorLogIndex + 4]
+        )![1];
         comparedValues = [
           new PublicKey(leftPubkey),
           new PublicKey(rightPubkey),
@@ -107,7 +111,9 @@ export class MainstayError extends Error {
       // <MainstayError>
       // Left: <value>
       // Right: <value>
-      else if (logs[mainstayErrorLogIndex + 1].startsWith("Program log: Left:")) {
+      else if (
+        logs[mainstayErrorLogIndex + 1].startsWith("Program log: Left:")
+      ) {
         const valueRegex = /^Program log: (Left|Right): (.*)$/;
         const leftValue = valueRegex.exec(logs[mainstayErrorLogIndex + 1])![2];
         const rightValue = valueRegex.exec(logs[mainstayErrorLogIndex + 2])![2];
@@ -424,7 +430,8 @@ export const LangErrorCode = {
   AccountDuplicateReallocs: errors.MAINSTAY_ERROR__ACCOUNT_DUPLICATE_REALLOCS,
 
   // Miscellaneous
-  DeclaredProgramIdMismatch: errors.MAINSTAY_ERROR__DECLARED_PROGRAM_ID_MISMATCH,
+  DeclaredProgramIdMismatch:
+    errors.MAINSTAY_ERROR__DECLARED_PROGRAM_ID_MISMATCH,
   TryingToInitPayerAsProgramAccount:
     errors.MAINSTAY_ERROR__TRYING_TO_INIT_PAYER_AS_PROGRAM_ACCOUNT,
   InvalidNumericConversion: errors.MAINSTAY_ERROR__INVALID_NUMERIC_CONVERSION,
