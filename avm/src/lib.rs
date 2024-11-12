@@ -158,7 +158,10 @@ fn get_mainstay_version_from_commit(commit: &str) -> Result<Version> {
 
     let mainstay_cli_cargo_toml = response.text()?;
     let mainstay_cli_manifest = Manifest::from_str(&mainstay_cli_cargo_toml)?;
-    let mut version = mainstay_cli_manifest.package().version().parse::<Version>()?;
+    let mut version = mainstay_cli_manifest
+        .package()
+        .version()
+        .parse::<Version>()?;
     version.pre = Prerelease::new(commit)?;
 
     Ok(version)
@@ -177,7 +180,11 @@ pub fn install_version(install_target: InstallTarget, force: bool) -> Result<()>
     ];
     let version = match install_target {
         InstallTarget::Version(version) => {
-            args.extend(["--tag".into(), format!("v{}", version), "mainstay-cli".into()]);
+            args.extend([
+                "--tag".into(),
+                format!("v{}", version),
+                "mainstay-cli".into(),
+            ]);
             version
         }
         InstallTarget::Commit(commit) => {

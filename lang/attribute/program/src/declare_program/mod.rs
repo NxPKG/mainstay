@@ -1,8 +1,8 @@
 mod common;
 mod mods;
 
-use mainstay_lang_idl::{convert::convert_idl, types::Idl};
 use anyhow::anyhow;
+use mainstay_lang_idl::{convert::convert_idl, types::Idl};
 use quote::{quote, ToTokens};
 use syn::parse::{Parse, ParseStream};
 

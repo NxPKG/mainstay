@@ -1,3 +1,4 @@
+use heck::CamelCase;
 use mainstay_lang_idl::types::{
     Idl, IdlInstruction, IdlInstructionAccountItem, IdlInstructionAccounts,
 };
@@ -6,7 +7,6 @@ use mainstay_syn::{
     parser::accounts,
     AccountsStruct,
 };
-use heck::CamelCase;
 use quote::{format_ident, quote};
 
 use super::common::{convert_idl_type_to_syn_type, gen_discriminator, get_canonical_program_id};

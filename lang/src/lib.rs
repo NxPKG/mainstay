@@ -412,13 +412,13 @@ pub mod prelude {
         require_keys_eq, require_keys_neq, require_neq,
         solana_program::bpf_loader_upgradeable::UpgradeableLoaderState, source,
         system_program::System, zero_copy, AccountDeserialize, AccountSerialize, Accounts,
-        AccountsClose, AccountsExit, MainstayDeserialize, MainstaySerialize, Discriminator, Id,
-        InitSpace, Key, Lamports, Owner, ProgramData, Result, Space, ToAccountInfo, ToAccountInfos,
-        ToAccountMetas,
+        AccountsClose, AccountsExit, Discriminator, Id, InitSpace, Key, Lamports,
+        MainstayDeserialize, MainstaySerialize, Owner, ProgramData, Result, Space, ToAccountInfo,
+        ToAccountInfos, ToAccountMetas,
     };
-    pub use mainstay_attribute_error::*;
     pub use borsh;
     pub use error::*;
+    pub use mainstay_attribute_error::*;
     pub use solana_program::account_info::{next_account_info, AccountInfo};
     pub use solana_program::instruction::AccountMeta;
     pub use solana_program::msg;
@@ -451,9 +451,9 @@ pub mod prelude {
 /// Internal module used by macros and unstable apis.
 #[doc(hidden)]
 pub mod __private {
-    pub use mainstay_attribute_account::ZeroCopyAccessor;
     pub use base64;
     pub use bytemuck;
+    pub use mainstay_attribute_account::ZeroCopyAccessor;
 
     pub use crate::{bpf_writer::BpfWriter, common::is_closed};
 
@@ -620,8 +620,10 @@ macro_rules! require_keys_eq {
     };
     ($value1: expr, $value2: expr $(,)?) => {
         if $value1 != $value2 {
-            return Err(error!(mainstay_lang::error::ErrorCode::RequireKeysEqViolated)
-                .with_pubkeys(($value1, $value2)));
+            return Err(
+                error!(mainstay_lang::error::ErrorCode::RequireKeysEqViolated)
+                    .with_pubkeys(($value1, $value2)),
+            );
         }
     };
 }

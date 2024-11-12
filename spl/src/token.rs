@@ -295,8 +295,12 @@ pub fn initialize_mint2<'info>(
         freeze_authority,
         decimals,
     )?;
-    mainstay_lang::solana_program::program::invoke_signed(&ix, &[ctx.accounts.mint], ctx.signer_seeds)
-        .map_err(Into::into)
+    mainstay_lang::solana_program::program::invoke_signed(
+        &ix,
+        &[ctx.accounts.mint],
+        ctx.signer_seeds,
+    )
+    .map_err(Into::into)
 }
 
 pub fn set_authority<'info>(
