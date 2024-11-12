@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use mainstay_lang::prelude::borsh::maybestd::io::Write;
 use mainstay_lang::prelude::*;
-use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::pubkey::Pubkey;
 
 // Needed to declare accounts.

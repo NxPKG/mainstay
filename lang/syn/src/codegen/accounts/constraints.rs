@@ -828,12 +828,16 @@ fn generate_constraint_init_group(
             };
 
             let group_pointer_group_address = match group_pointer_group_address {
-                Some(gpga) => quote! { Option::<mainstay_lang::prelude::Pubkey>::Some(#gpga.key()) },
+                Some(gpga) => {
+                    quote! { Option::<mainstay_lang::prelude::Pubkey>::Some(#gpga.key()) }
+                }
                 None => quote! { Option::<mainstay_lang::prelude::Pubkey>::None },
             };
 
             let group_member_pointer_authority = match group_member_pointer_authority {
-                Some(gmpa) => quote! { Option::<mainstay_lang::prelude::Pubkey>::Some(#gmpa.key()) },
+                Some(gmpa) => {
+                    quote! { Option::<mainstay_lang::prelude::Pubkey>::Some(#gmpa.key()) }
+                }
                 None => quote! { Option::<mainstay_lang::prelude::Pubkey>::None },
             };
 
@@ -850,7 +854,9 @@ fn generate_constraint_init_group(
             };
 
             let metadata_pointer_metadata_address = match metadata_pointer_metadata_address {
-                Some(mpma) => quote! { Option::<mainstay_lang::prelude::Pubkey>::Some(#mpma.key()) },
+                Some(mpma) => {
+                    quote! { Option::<mainstay_lang::prelude::Pubkey>::Some(#mpma.key()) }
+                }
                 None => quote! { Option::<mainstay_lang::prelude::Pubkey>::None },
             };
 

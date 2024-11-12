@@ -1,15 +1,10 @@
 use crate::config::{
-    get_default_ledger_path, MainstayPackage, BootstrapMode, BuildConfig, Config, ConfigOverride,
+    get_default_ledger_path, BootstrapMode, BuildConfig, Config, ConfigOverride, MainstayPackage,
     Manifest, PackageManager, ProgramArch, ProgramDeployment, ProgramWorkspace, ScriptsConfig,
     TestValidator, WithPath, SHUTDOWN_WAIT, STARTUP_WAIT,
 };
-use mainstay_client::Cluster;
-use mainstay_lang::idl::{IdlAccount, IdlInstruction, ERASED_AUTHORITY};
-use mainstay_lang::{AccountDeserialize, MainstayDeserialize, MainstaySerialize, Discriminator};
-use mainstay_lang_idl::convert::convert_idl;
-use mainstay_lang_idl::types::{Idl, IdlArrayLen, IdlDefinedFields, IdlType, IdlTypeDefTy};
 use anyhow::{anyhow, Context, Result};
-use checks::{check_mainstay_version, check_deps, check_idl_build_feature, check_overflow};
+use checks::{check_deps, check_idl_build_feature, check_mainstay_version, check_overflow};
 use clap::{CommandFactory, Parser};
 use dirs::home_dir;
 use flate2::read::GzDecoder;
@@ -17,6 +12,11 @@ use flate2::read::ZlibDecoder;
 use flate2::write::{GzEncoder, ZlibEncoder};
 use flate2::Compression;
 use heck::{ToKebabCase, ToLowerCamelCase, ToPascalCase, ToSnakeCase};
+use mainstay_client::Cluster;
+use mainstay_lang::idl::{IdlAccount, IdlInstruction, ERASED_AUTHORITY};
+use mainstay_lang::{AccountDeserialize, Discriminator, MainstayDeserialize, MainstaySerialize};
+use mainstay_lang_idl::convert::convert_idl;
+use mainstay_lang_idl::types::{Idl, IdlArrayLen, IdlDefinedFields, IdlType, IdlTypeDefTy};
 use regex::{Regex, RegexBuilder};
 use reqwest::blocking::multipart::{Form, Part};
 use reqwest::blocking::Client;
@@ -1247,7 +1247,10 @@ pub fn expand(
     }
 
     let workspace_cfg = Config::discover(cfg_override)?.expect("Not in workspace.");
-    let cfg_parent = workspace_cfg.path().parent().expect("Invalid Mainstay.toml");
+    let cfg_parent = workspace_cfg
+        .path()
+        .parent()
+        .expect("Invalid Mainstay.toml");
     let cargo = Manifest::discover()?;
 
     let expansions_path = cfg_parent.join(".mainstay").join("expanded-macros");
