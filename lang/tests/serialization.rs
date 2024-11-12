@@ -1,4 +1,4 @@
-use mainstay_lang::{MainstayDeserialize, MainstaySerialize, Discriminator, InstructionData};
+use mainstay_lang::{Discriminator, InstructionData, MainstayDeserialize, MainstaySerialize};
 
 #[test]
 fn test_instruction_data() {

@@ -12,7 +12,8 @@ macro_rules! vote_weight_record {
                 let vwr: spl_governance_addin_api::voter_weight::VoterWeightRecord =
                     mainstay_lang::MainstayDeserialize::deserialize(&mut data)
                         .map_err(|_| mainstay_lang::error::ErrorCode::AccountDidNotDeserialize)?;
-                if !mainstay_lang::solana_program::program_pack::IsInitialized::is_initialized(&vwr) {
+                if !mainstay_lang::solana_program::program_pack::IsInitialized::is_initialized(&vwr)
+                {
                     return Err(mainstay_lang::error::ErrorCode::AccountDidNotSerialize.into());
                 }
                 Ok(VoterWeightRecord(vwr))
@@ -28,7 +29,10 @@ macro_rules! vote_weight_record {
         }
 
         impl mainstay_lang::AccountSerialize for VoterWeightRecord {
-            fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> mainstay_lang::Result<()> {
+            fn try_serialize<W: std::io::Write>(
+                &self,
+                writer: &mut W,
+            ) -> mainstay_lang::Result<()> {
                 mainstay_lang::MainstaySerialize::serialize(&self.0, writer)
                     .map_err(|_| mainstay_lang::error::ErrorCode::AccountDidNotSerialize)?;
                 Ok(())

@@ -1,10 +1,10 @@
 use crate::{get_keypair, is_hidden, keys_sync};
-use mainstay_client::Cluster;
-use mainstay_lang_idl::types::Idl;
 use anyhow::{anyhow, bail, Context, Error, Result};
 use clap::{Parser, ValueEnum};
 use dirs::home_dir;
 use heck::ToSnakeCase;
+use mainstay_client::Cluster;
+use mainstay_lang_idl::types::Idl;
 use reqwest::Url;
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};

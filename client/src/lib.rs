@@ -69,10 +69,10 @@
 //!
 //! [`RpcClient::new_mock`]: https://docs.rs/solana-client/2.1.0/solana_client/rpc_client/struct.RpcClient.html#method.new_mock
 
+use futures::{Future, StreamExt};
 use mainstay_lang::solana_program::program_error::ProgramError;
 use mainstay_lang::solana_program::pubkey::Pubkey;
 use mainstay_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
-use futures::{Future, StreamExt};
 use regex::Regex;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::nonblocking::rpc_client::RpcClient as AsyncRpcClient;
@@ -108,8 +108,8 @@ use tokio::{
     task::JoinHandle,
 };
 
-pub use mainstay_lang;
 pub use cluster::Cluster;
+pub use mainstay_lang;
 #[cfg(feature = "async")]
 pub use nonblocking::ThreadSafeSigner;
 pub use solana_client;
@@ -378,9 +378,9 @@ pub fn handle_program_log<T: mainstay_lang::Event + mainstay_lang::MainstayDeser
     self_program_str: &str,
     l: &str,
 ) -> Result<(Option<T>, Option<String>, bool), ClientError> {
-    use mainstay_lang::__private::base64;
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
+    use mainstay_lang::__private::base64;
 
     // Log emitted from the current program.
     if let Some(log) = l

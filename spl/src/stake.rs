@@ -1,3 +1,4 @@
+use borsh::BorshDeserialize;
 use mainstay_lang::{
     context::CpiContext,
     solana_program::{
@@ -11,7 +12,6 @@ use mainstay_lang::{
     },
     Accounts, Result,
 };
-use borsh::BorshDeserialize;
 use std::ops::Deref;
 
 // CPI functions

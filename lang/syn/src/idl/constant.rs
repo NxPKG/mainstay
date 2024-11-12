@@ -14,7 +14,10 @@ pub fn gen_idl_print_fn_constant(item: &syn::ItemConst) -> TokenStream {
 
     let name = item.ident.to_string();
     let expr = &item.expr;
-    let fn_name = format_ident!("__mainstay_private_print_idl_const_{}", name.to_snake_case());
+    let fn_name = format_ident!(
+        "__mainstay_private_print_idl_const_{}",
+        name.to_snake_case()
+    );
 
     let docs = match docs::parse(&item.attrs) {
         Some(docs) if !no_docs => quote! { vec![#(#docs.into()),*] },
