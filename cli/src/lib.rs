@@ -1,17 +1,16 @@
-#![cfg_attr(nightly, feature(proc_macro_span))]
-
 use crate::config::{
-    MainstayPackage, BootstrapMode, BuildConfig, Config, ConfigOverride, Manifest, ProgramArch,
-    ProgramDeployment, ProgramWorkspace, ScriptsConfig, TestValidator, WithPath,
-    DEFAULT_LEDGER_PATH, SHUTDOWN_WAIT, STARTUP_WAIT,
+    get_default_ledger_path, MainstayPackage, BootstrapMode, BuildConfig, Config, ConfigOverride,
+    Manifest, PackageManager, ProgramArch, ProgramDeployment, ProgramWorkspace, ScriptsConfig,
+    TestValidator, WithPath, SHUTDOWN_WAIT, STARTUP_WAIT,
 };
 use mainstay_client::Cluster;
 use mainstay_lang::idl::{IdlAccount, IdlInstruction, ERASED_AUTHORITY};
-use mainstay_lang::{AccountDeserialize, MainstayDeserialize, MainstaySerialize};
+use mainstay_lang::{AccountDeserialize, MainstayDeserialize, MainstaySerialize, Discriminator};
+use mainstay_lang_idl::convert::convert_idl;
 use mainstay_lang_idl::types::{Idl, IdlArrayLen, IdlDefinedFields, IdlType, IdlTypeDefTy};
 use anyhow::{anyhow, Context, Result};
-use checks::{check_mainstay_version, check_overflow};
-use clap::Parser;
+use checks::{check_mainstay_version, check_deps, check_idl_build_feature, check_overflow};
+use clap::{CommandFactory, Parser};
 use dirs::home_dir;
 use flate2::read::GzDecoder;
 use flate2::read::ZlibDecoder;
@@ -83,6 +82,9 @@ pub enum Command {
         /// Don't install JavaScript dependencies
         #[clap(long)]
         no_install: bool,
+        /// Package Manager to use
+        #[clap(value_enum, long, default_value = "yarn")]
+        package_manager: PackageManager,
         /// Don't initialize git
         #[clap(long)]
         no_git: bool,
@@ -210,6 +212,9 @@ pub enum Command {
         /// use this to save time when running test and the program code is not altered.
         #[clap(long)]
         skip_build: bool,
+        /// Do not build the IDL
+        #[clap(long)]
+        no_idl: bool,
         /// Architecture to use when building the program
         #[clap(value_enum, long, default_value = "sbf")]
         arch: ProgramArch,
@@ -247,7 +252,7 @@ pub enum Command {
         #[clap(subcommand)]
         subcmd: IdlCommand,
     },
-    /// Remove all artifacts from the target directory except program keypairs.
+    /// Remove all artifacts from the generated directories except program keypairs.
     Clean,
     /// Deploys each program in the workspace.
     Deploy {
@@ -324,7 +329,7 @@ pub enum Command {
         #[clap(value_enum, long, default_value = "sbf")]
         arch: ProgramArch,
     },
-    /// Keypair commands.
+    /// Program keypair commands.
     Keys {
         #[clap(subcommand)]
         subcmd: KeysCommand,
@@ -363,13 +368,18 @@ pub enum Command {
         #[clap(long)]
         idl: Option<String>,
     },
+    /// Generates shell completions.
+    Completions {
+        #[clap(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 #[derive(Debug, Parser)]
 pub enum KeysCommand {
     /// List all of the program keys.
     List,
-    /// Sync the program's `declare_id!` pubkey with the program's actual pubkey.
+    /// Sync program `declare_id!` pubkeys with the program's actual pubkey.
     Sync {
         /// Only sync the given program instead of all programs
         #[clap(short, long)]
@@ -463,6 +473,7 @@ pub enum IdlCommand {
         program_id: Pubkey,
     },
     /// Generates the IDL for the program using the compilation method.
+    #[clap(alias = "b")]
     Build {
         // Program name to build the IDL of(current dir's program if not specified)
         #[clap(short, long)]
@@ -479,6 +490,9 @@ pub enum IdlCommand {
         /// Do not check for safety comments
         #[clap(long)]
         skip_lint: bool,
+        /// Arguments to pass to the underlying `cargo test` command
+        #[clap(required = false, last = true)]
+        cargo_args: Vec<String>,
     },
     /// Fetches an IDL for the given address from a cluster.
     /// The address can be a program, IDL account, or IDL buffer.
@@ -495,6 +509,9 @@ pub enum IdlCommand {
         /// Output file for the IDL (stdout if not specified)
         #[clap(short, long)]
         out: Option<String>,
+        /// Address to use (defaults to `metadata.address` value)
+        #[clap(short, long)]
+        program_id: Option<Pubkey>,
     },
     /// Generate TypeScript type for the IDL
     Type {
@@ -568,9 +585,46 @@ fn override_toolchain(cfg_override: &ConfigOverride) -> Result<RestoreToolchainC
                 // from `~/.local/share/solana/install/releases` because we use multiple Solana
                 // binaries in various commands.
                 fn override_solana_version(version: String) -> Result<bool> {
-                    let output = std::process::Command::new("solana-install")
-                        .arg("list")
-                        .output()?;
+                    // There is a deprecation warning message starting with `1.18.19` which causes
+                    // parsing problems https://github.com/nxpkg/mainstay/issues/3147
+                    let (cmd_name, domain) =
+                        if Version::parse(&version)? < Version::parse("1.18.19")? {
+                            ("solana-install", "solana.com")
+                        } else {
+                            ("agave-install", "anza.xyz")
+                        };
+
+                    // Install the command if it's not installed
+                    if get_current_version(cmd_name).is_err() {
+                        // `solana-install` and `agave-install` are not usable at the same time i.e.
+                        // using one of them makes the other unusable with the default installation,
+                        // causing the installation process to run each time users switch between
+                        // `agave` supported versions. For example, if the user's active Solana
+                        // version is `1.18.17`, and he specifies `solana_version = "2.0.6"`, this
+                        // code path will run each time an Mainstay command gets executed.
+                        eprintln!(
+                            "Command not installed: `{cmd_name}`. \
+                            See https://github.com/anza-xyz/agave/wiki/Agave-Transition, \
+                            installing..."
+                        );
+                        let install_script = std::process::Command::new("curl")
+                            .args([
+                                "-sSfL",
+                                &format!("https://release.{domain}/v{version}/install"),
+                            ])
+                            .output()?;
+                        let is_successful = std::process::Command::new("sh")
+                            .args(["-c", std::str::from_utf8(&install_script.stdout)?])
+                            .spawn()?
+                            .wait_with_output()?
+                            .status
+                            .success();
+                        if !is_successful {
+                            return Err(anyhow!("Failed to install `{cmd_name}`"));
+                        }
+                    }
+
+                    let output = std::process::Command::new(cmd_name).arg("list").output()?;
                     if !output.status.success() {
                         return Err(anyhow!("Failed to list installed `solana` versions"));
                     }
@@ -585,7 +639,7 @@ fn override_toolchain(cfg_override: &ConfigOverride) -> Result<RestoreToolchainC
                         (Stdio::inherit(), Stdio::inherit())
                     };
 
-                    std::process::Command::new("solana-install")
+                    std::process::Command::new(cmd_name)
                         .arg("init")
                         .arg(&version)
                         .stderr(stderr)
@@ -593,7 +647,7 @@ fn override_toolchain(cfg_override: &ConfigOverride) -> Result<RestoreToolchainC
                         .spawn()?
                         .wait()
                         .map(|status| status.success())
-                        .map_err(|err| anyhow!("Failed to run `solana-install` command: {err}"))
+                        .map_err(|err| anyhow!("Failed to run `{cmd_name}` command: {err}"))
                 }
 
                 match override_solana_version(solana_version.to_owned())? {
@@ -705,6 +759,7 @@ fn process_command(opts: Opts) -> Result<()> {
             javascript,
             solidity,
             no_install,
+            package_manager,
             no_git,
             template,
             test_template,
@@ -715,6 +770,7 @@ fn process_command(opts: Opts) -> Result<()> {
             javascript,
             solidity,
             no_install,
+            package_manager,
             no_git,
             template,
             test_template,
@@ -814,6 +870,7 @@ fn process_command(opts: Opts) -> Result<()> {
             skip_deploy,
             skip_local_validator,
             skip_build,
+            no_idl,
             detach,
             run,
             args,
@@ -828,6 +885,7 @@ fn process_command(opts: Opts) -> Result<()> {
             skip_local_validator,
             skip_build,
             skip_lint,
+            no_idl,
             detach,
             run,
             args,
@@ -880,6 +938,15 @@ fn process_command(opts: Opts) -> Result<()> {
             address,
             idl,
         } => account(&opts.cfg_override, account_type, address, idl),
+        Command::Completions { shell } => {
+            clap_complete::generate(
+                shell,
+                &mut Opts::command(),
+                "mainstay",
+                &mut std::io::stdout(),
+            );
+            Ok(())
+        }
     }
 }
 
@@ -890,6 +957,7 @@ fn init(
     javascript: bool,
     solidity: bool,
     no_install: bool,
+    package_manager: PackageManager,
     no_git: bool,
     template: ProgramTemplate,
     test_template: TestTemplate,
@@ -928,9 +996,12 @@ fn init(
     fs::create_dir_all("app")?;
 
     let mut cfg = Config::default();
-    let test_script = test_template.get_test_script(javascript);
-    cfg.scripts
-        .insert("test".to_owned(), test_script.to_owned());
+
+    let test_script = test_template.get_test_script(javascript, &package_manager);
+    cfg.scripts.insert("test".to_owned(), test_script);
+
+    let package_manager_cmd = package_manager.to_string();
+    cfg.toolchain.package_manager = Some(package_manager);
 
     let mut localnet = BTreeMap::new();
     let program_id = rust_template::get_or_create_program_id(&rust_name);
@@ -969,7 +1040,8 @@ fn init(
     }
 
     // Build the migrations directory.
-    fs::create_dir_all("migrations")?;
+    let migrations_path = Path::new("migrations");
+    fs::create_dir_all(migrations_path)?;
 
     let license = get_npm_init_license()?;
 
@@ -979,8 +1051,7 @@ fn init(
         let mut package_json = File::create("package.json")?;
         package_json.write_all(rust_template::package_json(jest, license).as_bytes())?;
 
-        let mut deploy = File::create("migrations/deploy.js")?;
-
+        let mut deploy = File::create(migrations_path.join("deploy.js"))?;
         deploy.write_all(rust_template::deploy_script().as_bytes())?;
     } else {
         // Build typescript config
@@ -990,7 +1061,7 @@ fn init(
         let mut ts_package_json = File::create("package.json")?;
         ts_package_json.write_all(rust_template::ts_package_json(jest, license).as_bytes())?;
 
-        let mut deploy = File::create("migrations/deploy.ts")?;
+        let mut deploy = File::create(migrations_path.join("deploy.ts"))?;
         deploy.write_all(rust_template::ts_deploy_script().as_bytes())?;
     }
 
@@ -1002,10 +1073,16 @@ fn init(
     )?;
 
     if !no_install {
-        let yarn_result = install_node_modules("yarn")?;
-        if !yarn_result.status.success() {
-            println!("Failed yarn install will attempt to npm install");
+        let package_manager_result = install_node_modules(&package_manager_cmd)?;
+
+        if !package_manager_result.status.success() && package_manager_cmd != "npm" {
+            println!(
+                "Failed {} install will attempt to npm install",
+                package_manager_cmd
+            );
             install_node_modules("npm")?;
+        } else {
+            eprintln!("Failed to install node modules");
         }
     }
 
@@ -1112,7 +1189,11 @@ pub type Files = Vec<(PathBuf, String)>;
 /// ```
 pub fn create_files(files: &Files) -> Result<()> {
     for (path, content) in files {
-        let path = Path::new(path);
+        let path = path
+            .display()
+            .to_string()
+            .replace('/', std::path::MAIN_SEPARATOR_STR);
+        let path = Path::new(&path);
         if path.exists() {
             continue;
         }
@@ -1169,7 +1250,7 @@ pub fn expand(
     let cfg_parent = workspace_cfg.path().parent().expect("Invalid Mainstay.toml");
     let cargo = Manifest::discover()?;
 
-    let expansions_path = cfg_parent.join(".mainstay/expanded-macros");
+    let expansions_path = cfg_parent.join(".mainstay").join("expanded-macros");
     fs::create_dir_all(&expansions_path)?;
 
     match cargo {
@@ -1227,7 +1308,7 @@ fn expand_program(
     let exit = std::process::Command::new("cargo")
         .arg("expand")
         .arg(target_dir_arg)
-        .arg(&format!("--package={package_name}"))
+        .arg(format!("--package={package_name}"))
         .args(cargo_args)
         .stderr(Stdio::inherit())
         .output()
@@ -1273,7 +1354,6 @@ pub fn build(
     if let Some(program_name) = program_name.as_ref() {
         cd_member(cfg_override, program_name)?;
     }
-
     let cfg = Config::discover(cfg_override)?.expect("Not in workspace.");
     let cfg_parent = cfg.path().parent().expect("Invalid Mainstay.toml");
 
@@ -1285,16 +1365,17 @@ pub fn build(
 
     // Check whether there is a mismatch between CLI and crate/package versions
     check_mainstay_version(&cfg).ok();
+    check_deps(&cfg).ok();
 
     let idl_out = match idl {
         Some(idl) => Some(PathBuf::from(idl)),
-        None => Some(cfg_parent.join("target/idl")),
+        None => Some(cfg_parent.join("target").join("idl")),
     };
     fs::create_dir_all(idl_out.as_ref().unwrap())?;
 
     let idl_ts_out = match idl_ts {
         Some(idl_ts) => Some(PathBuf::from(idl_ts)),
-        None => Some(cfg_parent.join("target/types")),
+        None => Some(cfg_parent.join("target").join("types")),
     };
     fs::create_dir_all(idl_ts_out.as_ref().unwrap())?;
 
@@ -1504,9 +1585,10 @@ fn build_cwd_verifiable(
 ) -> Result<()> {
     // Create output dirs.
     let workspace_dir = cfg.path().parent().unwrap().canonicalize()?;
-    fs::create_dir_all(workspace_dir.join("target/verifiable"))?;
-    fs::create_dir_all(workspace_dir.join("target/idl"))?;
-    fs::create_dir_all(workspace_dir.join("target/types"))?;
+    let target_dir = workspace_dir.join("target");
+    fs::create_dir_all(target_dir.join("verifiable"))?;
+    fs::create_dir_all(target_dir.join("idl"))?;
+    fs::create_dir_all(target_dir.join("types"))?;
     if !&cfg.workspace.types.is_empty() {
         fs::create_dir_all(workspace_dir.join(&cfg.workspace.types))?;
     }
@@ -1522,7 +1604,7 @@ fn build_cwd_verifiable(
         stdout,
         stderr,
         env_vars,
-        cargo_args,
+        cargo_args.clone(),
         arch,
     );
 
@@ -1533,15 +1615,23 @@ fn build_cwd_verifiable(
         Ok(_) => {
             // Build the idl.
             println!("Extracting the IDL");
-            let idl = generate_idl(cfg, skip_lint, no_docs)?;
+            let idl = generate_idl(cfg, skip_lint, no_docs, &cargo_args)?;
             // Write out the JSON file.
             println!("Writing the IDL file");
-            let out_file = workspace_dir.join(format!("target/idl/{}.json", idl.metadata.name));
+            let out_file = workspace_dir
+                .join("target")
+                .join("idl")
+                .join(&idl.metadata.name)
+                .with_extension("json");
             write_idl(&idl, OutFile::File(out_file))?;
 
             // Write out the TypeScript type.
             println!("Writing the .ts file");
-            let ts_file = workspace_dir.join(format!("target/types/{}.ts", idl.metadata.name));
+            let ts_file = workspace_dir
+                .join("target")
+                .join("types")
+                .join(&idl.metadata.name)
+                .with_extension("ts");
             fs::write(&ts_file, idl_ts(&idl)?)?;
 
             // Copy out the TypeScript type.
@@ -1670,7 +1760,7 @@ fn docker_prep(container_name: &str, build_config: &BuildConfig) -> Result<()> {
             &[
                 "curl",
                 "-sSfL",
-                &format!("https://release.solana.com/v{solana_version}/install",),
+                &format!("https://release.anza.xyz/v{solana_version}/install",),
                 "-o",
                 "solana_installer.sh",
             ],
@@ -1743,7 +1833,12 @@ fn docker_build_bpf(
     println!("Copying out the build artifacts");
     let out_file = cfg_parent
         .canonicalize()?
-        .join(format!("target/verifiable/{binary_name}.so"))
+        .join(
+            Path::new("target")
+                .join("verifiable")
+                .join(&binary_name)
+                .with_extension("so"),
+        )
         .display()
         .to_string();
 
@@ -1816,10 +1911,9 @@ fn _build_rust_cwd(
     arch: &ProgramArch,
     cargo_args: Vec<String>,
 ) -> Result<()> {
-    let subcommand = arch.build_subcommand();
     let exit = std::process::Command::new("cargo")
-        .arg(subcommand)
-        .args(cargo_args)
+        .arg(arch.build_subcommand())
+        .args(cargo_args.clone())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .output()
@@ -1830,7 +1924,7 @@ fn _build_rust_cwd(
 
     // Generate IDL
     if !no_idl {
-        let idl = generate_idl(cfg, skip_lint, no_docs)?;
+        let idl = generate_idl(cfg, skip_lint, no_docs, &cargo_args)?;
 
         // JSON out path.
         let out = match idl_out {
@@ -1915,9 +2009,8 @@ fn _build_solidity_cwd(
         .unwrap_or(PathBuf::from("."))
         .join(format!("{}.json", name));
 
-    let idl = fs::read_to_string(idl_path)?;
-
-    let idl: Idl = serde_json::from_str(&idl)?;
+    let idl = fs::read(idl_path)?;
+    let idl = convert_idl(&idl)?;
 
     // TS out path.
     let ts_out = match idl_ts_out {
@@ -1983,7 +2076,7 @@ fn verify(
             None,
             None,
             env_vars,
-            cargo_args,
+            cargo_args.clone(),
             false,
             arch,
         )?;
@@ -1996,8 +2089,10 @@ fn verify(
         .path()
         .parent()
         .ok_or_else(|| anyhow!("Unable to find workspace root"))?
-        .join("target/verifiable/")
-        .join(format!("{binary_name}.so"));
+        .join("target")
+        .join("verifiable")
+        .join(&binary_name)
+        .with_extension("so");
 
     let url = cluster_url(&cfg, &cfg.test_validator);
     let bin_ver = verify_bin(program_id, &bin_path, &url)?;
@@ -2007,9 +2102,9 @@ fn verify(
     }
 
     // Verify IDL (only if it's not a buffer account).
-    let local_idl = generate_idl(&cfg, true, false)?;
+    let local_idl = generate_idl(&cfg, true, false, &cargo_args)?;
     if bin_ver.state != BinVerificationState::Buffer {
-        let deployed_idl = fetch_idl(cfg_override, program_id)?;
+        let deployed_idl = fetch_idl(cfg_override, program_id).map(serde_json::from_value)??;
         if local_idl != deployed_idl {
             println!("Error: IDLs don't match");
             std::process::exit(1);
@@ -2214,23 +2309,37 @@ fn idl(cfg_override: &ConfigOverride, subcmd: IdlCommand) -> Result<()> {
             out_ts,
             no_docs,
             skip_lint,
-        } => idl_build(cfg_override, program_name, out, out_ts, no_docs, skip_lint),
+            cargo_args,
+        } => idl_build(
+            cfg_override,
+            program_name,
+            out,
+            out_ts,
+            no_docs,
+            skip_lint,
+            cargo_args,
+        ),
         IdlCommand::Fetch { address, out } => idl_fetch(cfg_override, address, out),
-        IdlCommand::Convert { path, out } => idl_convert(path, out),
+        IdlCommand::Convert {
+            path,
+            out,
+            program_id,
+        } => idl_convert(path, out, program_id),
         IdlCommand::Type { path, out } => idl_type(path, out),
     }
 }
 
 /// Fetch an IDL for the given program id.
-fn fetch_idl(cfg_override: &ConfigOverride, idl_addr: Pubkey) -> Result<Idl> {
+///
+/// Intentionally returns [`serde_json::Value`] rather than [`Idl`] to also support legacy IDLs.
+fn fetch_idl(cfg_override: &ConfigOverride, idl_addr: Pubkey) -> Result<serde_json::Value> {
     let url = match Config::discover(cfg_override)? {
         Some(cfg) => cluster_url(&cfg, &cfg.test_validator),
         None => {
             // If the command is not run inside a workspace,
             // cluster_url will be used from default solana config
             // provider.cluster option can be used to override this
-
-            if let Some(cluster) = cfg_override.cluster.clone() {
+            if let Some(cluster) = cfg_override.cluster.as_ref() {
                 cluster.url().to_string()
             } else {
                 config::get_solana_cfg_url()?
@@ -2247,7 +2356,7 @@ fn fetch_idl(cfg_override: &ConfigOverride, idl_addr: Pubkey) -> Result<Idl> {
     }
 
     // Cut off account discriminator.
-    let mut d: &[u8] = &account.data[8..];
+    let mut d: &[u8] = &account.data[IdlAccount::DISCRIMINATOR.len()..];
     let idl_account: IdlAccount = MainstayDeserialize::deserialize(&mut d)?;
 
     let compressed_len: usize = idl_account.data_len.try_into().unwrap();
@@ -2273,8 +2382,8 @@ fn idl_init(
     with_workspace(cfg_override, |cfg| {
         let keypair = cfg.provider.wallet.to_string();
 
-        let bytes = fs::read(idl_filepath)?;
-        let idl: Idl = serde_json::from_reader(&*bytes)?;
+        let idl = fs::read(idl_filepath)?;
+        let idl = convert_idl(&idl)?;
 
         let idl_address = create_idl_account(cfg, &keypair, &program_id, &idl, priority_fee)?;
 
@@ -2307,8 +2416,8 @@ fn idl_write_buffer(
     with_workspace(cfg_override, |cfg| {
         let keypair = cfg.provider.wallet.to_string();
 
-        let bytes = fs::read(idl_filepath)?;
-        let idl: Idl = serde_json::from_reader(&*bytes)?;
+        let idl = fs::read(idl_filepath)?;
+        let idl = convert_idl(&idl)?;
 
         let idl_buffer = create_idl_buffer(cfg, &keypair, &program_id, &idl, priority_fee)?;
         idl_write(cfg, &program_id, &idl, idl_buffer, priority_fee)?;
@@ -2656,25 +2765,29 @@ fn idl_build(
     out_ts: Option<String>,
     no_docs: bool,
     skip_lint: bool,
+    cargo_args: Vec<String>,
 ) -> Result<()> {
     let cfg = Config::discover(cfg_override)?.expect("Not in workspace");
+    let current_dir = std::env::current_dir()?;
     let program_path = match program_name {
         Some(name) => cfg.get_program(&name)?.path,
         None => {
-            let current_dir = std::env::current_dir()?;
-            cfg.read_all_programs()?
-                .into_iter()
-                .find(|program| program.path == current_dir)
-                .ok_or_else(|| anyhow!("Not in a program directory"))?
-                .path
+            let programs = cfg.read_all_programs()?;
+            if programs.len() == 1 {
+                programs.into_iter().next().unwrap().path
+            } else {
+                programs
+                    .into_iter()
+                    .find(|program| program.path == current_dir)
+                    .ok_or_else(|| anyhow!("Not in a program directory"))?
+                    .path
+            }
         }
     };
-    let idl = mainstay_lang_idl::build::build_idl(
-        program_path,
-        cfg.features.resolution,
-        cfg.features.skip_lint || skip_lint,
-        no_docs,
-    )?;
+    std::env::set_current_dir(program_path)?;
+    let idl = generate_idl(&cfg, skip_lint, no_docs, &cargo_args)?;
+    std::env::set_current_dir(current_dir)?;
+
     let out = match out {
         Some(path) => OutFile::File(PathBuf::from(path)),
         None => OutFile::Stdout,
@@ -2689,52 +2802,51 @@ fn idl_build(
 }
 
 /// Generate IDL with method decided by whether manifest file has `idl-build` feature or not.
-fn generate_idl(cfg: &WithPath<Config>, skip_lint: bool, no_docs: bool) -> Result<Idl> {
-    // Check whether the manifest has `idl-build` feature
-    let manifest = Manifest::discover()?.ok_or_else(|| anyhow!("Cargo.toml not found"))?;
-    let is_idl_build = manifest
-        .features
-        .iter()
-        .any(|(feature, _)| feature == "idl-build");
-    if !is_idl_build {
-        let path = manifest.path().display();
-        let mainstay_spl_idl_build = manifest
-            .dependencies
-            .iter()
-            .any(|dep| dep.0 == "mainstay-spl")
-            .then_some(r#", "mainstay-spl/idl-build""#)
-            .unwrap_or_default();
+fn generate_idl(
+    cfg: &WithPath<Config>,
+    skip_lint: bool,
+    no_docs: bool,
+    cargo_args: &[String],
+) -> Result<Idl> {
+    check_idl_build_feature()?;
 
-        return Err(anyhow!(
-            r#"`idl-build` feature is missing. To solve, add
-
-[features]
-idl-build = ["mainstay-lang/idl-build"{mainstay_spl_idl_build}]
-
-in `{path}`."#
-        ));
-    }
-
-    mainstay_lang_idl::build::build_idl(
-        std::env::current_dir()?,
-        cfg.features.resolution,
-        cfg.features.skip_lint || skip_lint,
-        no_docs,
-    )
+    mainstay_lang_idl::build::IdlBuilder::new()
+        .resolution(cfg.features.resolution)
+        .skip_lint(cfg.features.skip_lint || skip_lint)
+        .no_docs(no_docs)
+        .cargo_args(cargo_args.into())
+        .build()
 }
 
 fn idl_fetch(cfg_override: &ConfigOverride, address: Pubkey, out: Option<String>) -> Result<()> {
-    let idl = fetch_idl(cfg_override, address)?;
-    let out = match out {
-        None => OutFile::Stdout,
-        Some(out) => OutFile::File(PathBuf::from(out)),
+    let idl = fetch_idl(cfg_override, address).map(|idl| serde_json::to_string_pretty(&idl))??;
+    match out {
+        Some(out) => fs::write(out, idl)?,
+        _ => println!("{idl}"),
     };
-    write_idl(&idl, out)
+
+    Ok(())
 }
 
-fn idl_convert(path: String, out: Option<String>) -> Result<()> {
+fn idl_convert(path: String, out: Option<String>, program_id: Option<Pubkey>) -> Result<()> {
     let idl = fs::read(path)?;
-    let idl = Idl::from_slice_with_conversion(&idl)?;
+
+    // Set the `metadata.address` field based on the given `program_id`
+    let idl = match program_id {
+        Some(program_id) => {
+            let mut idl = serde_json::from_slice::<serde_json::Value>(&idl)?;
+            idl.as_object_mut()
+                .ok_or_else(|| anyhow!("IDL must be an object"))?
+                .insert(
+                    "metadata".into(),
+                    serde_json::json!({ "address": program_id.to_string() }),
+                );
+            serde_json::to_vec(&idl)?
+        }
+        _ => idl,
+    };
+
+    let idl = convert_idl(&idl)?;
     let out = match out {
         None => OutFile::Stdout,
         Some(out) => OutFile::File(PathBuf::from(out)),
@@ -2744,7 +2856,7 @@ fn idl_convert(path: String, out: Option<String>) -> Result<()> {
 
 fn idl_type(path: String, out: Option<String>) -> Result<()> {
     let idl = fs::read(path)?;
-    let idl = Idl::from_slice_with_conversion(&idl)?;
+    let idl = convert_idl(&idl)?;
     let types = idl_ts(&idl)?;
     match out {
         Some(out) => fs::write(out, types)?,
@@ -2852,25 +2964,26 @@ fn account(
                 .expect("Not in workspace.")
                 .read_all_programs()
                 .expect("Workspace must contain atleast one program.")
-                .iter()
-                .find(|&p| p.lib_name == *program_name)
-                .unwrap_or_else(|| panic!("Program {program_name} not found in workspace."))
-                .idl
-                .as_ref()
-                .expect("IDL not found. Please build the program atleast once to generate the IDL.")
-                .clone()
+                .into_iter()
+                .find(|p| p.lib_name == *program_name)
+                .ok_or_else(|| anyhow!("Program {program_name} not found in workspace."))
+                .map(|p| p.idl)?
+                .ok_or_else(|| {
+                    anyhow!(
+                        "IDL not found. Please build the program atleast once to generate the IDL."
+                    )
+                })
         },
         |idl_path| {
-            let bytes = fs::read(idl_path).expect("Unable to read IDL.");
-            let idl: Idl = serde_json::from_reader(&*bytes).expect("Invalid IDL format.");
-
+            let idl = fs::read(idl_path)?;
+            let idl = convert_idl(&idl)?;
             if idl.metadata.name != program_name {
-                panic!("IDL does not match program {program_name}.");
+                return Err(anyhow!("IDL does not match program {program_name}."));
             }
 
-            idl
+            Ok(idl)
         },
-    );
+    )?;
 
     let cluster = match &cfg_override.cluster {
         Some(cluster) => cluster.clone(),
@@ -2880,12 +2993,13 @@ fn account(
     };
 
     let data = create_client(cluster.url()).get_account_data(&address)?;
-    if data.len() < 8 {
-        return Err(anyhow!(
-            "The account has less than 8 bytes and is not an Mainstay account."
-        ));
-    }
-    let mut data_view = &data[8..];
+    let disc_len = idl
+        .accounts
+        .iter()
+        .find(|acc| acc.name == account_type_name)
+        .map(|acc| acc.discriminator.len())
+        .ok_or_else(|| anyhow!("Account `{account_type_name}` not found in IDL"))?;
+    let mut data_view = &data[disc_len..];
 
     let deserialized_json =
         deserialize_idl_defined_type_to_json(&idl, account_type_name, &mut data_view)?;
@@ -2943,7 +3057,7 @@ fn deserialize_idl_defined_type_to_json(
 
             let variant = variants
                 .get(repr as usize)
-                .unwrap_or_else(|| panic!("Error while deserializing enum variant {repr}"));
+                .ok_or_else(|| anyhow!("Error while deserializing enum variant {repr}"))?;
 
             let mut value = json!({});
 
@@ -3098,6 +3212,7 @@ fn test(
     skip_local_validator: bool,
     skip_build: bool,
     skip_lint: bool,
+    no_idl: bool,
     detach: bool,
     tests_to_run: Vec<String>,
     extra_args: Vec<String>,
@@ -3119,7 +3234,7 @@ fn test(
         if !skip_build {
             build(
                 cfg_override,
-                false,
+                no_idl,
                 None,
                 None,
                 false,
@@ -3357,7 +3472,8 @@ fn validator_flags(
             idl.address = address;
 
             // Persist it.
-            let idl_out = PathBuf::from("target/idl")
+            let idl_out = Path::new("target")
+                .join("idl")
                 .join(&idl.metadata.name)
                 .with_extension("json");
             write_idl(idl, OutFile::File(idl_out))?;
@@ -3487,22 +3603,24 @@ fn validator_flags(
 }
 
 fn stream_logs(config: &WithPath<Config>, rpc_url: &str) -> Result<Vec<std::process::Child>> {
-    let program_logs_dir = ".mainstay/program-logs";
-    if Path::new(program_logs_dir).exists() {
-        fs::remove_dir_all(program_logs_dir)?;
+    let program_logs_dir = Path::new(".mainstay").join("program-logs");
+    if program_logs_dir.exists() {
+        fs::remove_dir_all(&program_logs_dir)?;
     }
-    fs::create_dir_all(program_logs_dir)?;
+    fs::create_dir_all(&program_logs_dir)?;
+
     let mut handles = vec![];
     for program in config.read_all_programs()? {
-        let mut file = File::open(format!("target/idl/{}.json", program.lib_name))?;
-        let mut contents = vec![];
-        file.read_to_end(&mut contents)?;
-        let idl: Idl = serde_json::from_slice(&contents)?;
+        let idl_path = Path::new("target")
+            .join("idl")
+            .join(&program.lib_name)
+            .with_extension("json");
+        let idl = fs::read(idl_path)?;
+        let idl = convert_idl(&idl)?;
 
-        let log_file = File::create(format!(
-            "{}/{}.{}.log",
-            program_logs_dir, idl.address, program.lib_name,
-        ))?;
+        let log_file = File::create(
+            program_logs_dir.join(format!("{}.{}.log", idl.address, program.lib_name)),
+        )?;
         let stdio = std::process::Stdio::from(log_file);
         let child = std::process::Command::new("solana")
             .arg("logs")
@@ -3516,7 +3634,8 @@ fn stream_logs(config: &WithPath<Config>, rpc_url: &str) -> Result<Vec<std::proc
     if let Some(test) = config.test_validator.as_ref() {
         if let Some(genesis) = &test.genesis {
             for entry in genesis {
-                let log_file = File::create(format!("{}/{}.log", program_logs_dir, entry.address))?;
+                let log_file =
+                    File::create(program_logs_dir.join(&entry.address).with_extension("log"))?;
                 let stdio = std::process::Stdio::from(log_file);
                 let child = std::process::Command::new("solana")
                     .arg("logs")
@@ -3634,10 +3753,9 @@ fn test_validator_file_paths(test_validator: &Option<TestValidator>) -> Result<(
         Some(TestValidator {
             validator: Some(validator),
             ..
-        }) => &validator.ledger,
-        _ => DEFAULT_LEDGER_PATH,
+        }) => PathBuf::from(&validator.ledger),
+        _ => get_default_ledger_path(),
     };
-    let ledger_path = Path::new(ledger_path);
 
     if !ledger_path.is_relative() {
         // Prevent absolute paths to avoid someone using / or similar, as the
@@ -3646,15 +3764,13 @@ fn test_validator_file_paths(test_validator: &Option<TestValidator>) -> Result<(
         std::process::exit(1);
     }
     if ledger_path.exists() {
-        fs::remove_dir_all(ledger_path)?;
+        fs::remove_dir_all(&ledger_path)?;
     }
 
-    fs::create_dir_all(ledger_path)?;
+    fs::create_dir_all(&ledger_path)?;
 
-    Ok((
-        ledger_path.to_owned(),
-        ledger_path.join("test-ledger-log.txt"),
-    ))
+    let log_path = ledger_path.join("test-ledger-log.txt");
+    Ok((ledger_path, log_path))
 }
 
 fn cluster_url(cfg: &Config, test_validator: &Option<TestValidator>) -> String {
@@ -3670,8 +3786,14 @@ fn cluster_url(cfg: &Config, test_validator: &Option<TestValidator>) -> String {
 fn clean(cfg_override: &ConfigOverride) -> Result<()> {
     let cfg = Config::discover(cfg_override)?.expect("Not in workspace.");
     let cfg_parent = cfg.path().parent().expect("Invalid Mainstay.toml");
+    let dot_mainstay_dir = cfg_parent.join(".mainstay");
     let target_dir = cfg_parent.join("target");
     let deploy_dir = target_dir.join("deploy");
+
+    if dot_mainstay_dir.exists() {
+        fs::remove_dir_all(&dot_mainstay_dir)
+            .map_err(|e| anyhow!("Could not remove directory {:?}: {}", dot_mainstay_dir, e))?;
+    }
 
     if target_dir.exists() {
         for entry in fs::read_dir(target_dir)? {
@@ -3761,7 +3883,8 @@ fn deploy(
                 idl.address = program_id.to_string();
 
                 // Persist it.
-                let idl_out = PathBuf::from("target/idl")
+                let idl_out = Path::new("target")
+                    .join("idl")
                     .join(&idl.metadata.name)
                     .with_extension("json");
                 write_idl(idl, OutFile::File(idl_out))?;
@@ -3791,9 +3914,9 @@ fn upgrade(
             .arg("--url")
             .arg(url)
             .arg("--keypair")
-            .arg(&cfg.provider.wallet.to_string())
+            .arg(cfg.provider.wallet.to_string())
             .arg("--program-id")
-            .arg(strip_workspace_prefix(program_id.to_string()))
+            .arg(program_id.to_string())
             .arg(strip_workspace_prefix(program_filepath))
             .args(&solana_args)
             .stdout(Stdio::inherit())
@@ -3921,7 +4044,7 @@ fn create_idl_buffer(
 
     // Creates the new buffer account with the system program.
     let create_account_ix = {
-        let space = 8 + 32 + 4 + serialize_idl(idl)?.len();
+        let space = IdlAccount::DISCRIMINATOR.len() + 32 + 4 + serialize_idl(idl)?.len();
         let lamports = client.get_minimum_balance_for_rent_exemption(space)?;
         solana_sdk::system_instruction::create_account(
             &keypair.pubkey(),
@@ -4016,7 +4139,12 @@ fn migrate(cfg_override: &ConfigOverride) -> Result<()> {
                 rust_template::deploy_ts_script_host(&url, &module_path.display().to_string());
             fs::write(deploy_ts, deploy_script_host_str)?;
 
-            std::process::Command::new("yarn")
+            let pkg_manager_cmd = match &cfg.toolchain.package_manager {
+                Some(pkg_manager) => pkg_manager.to_string(),
+                None => PackageManager::default().to_string(),
+            };
+
+            std::process::Command::new(pkg_manager_cmd)
                 .args([
                     "run",
                     "ts-node",
@@ -4203,12 +4331,14 @@ fn run(cfg_override: &ConfigOverride, script: String, script_args: Vec<String>) 
 }
 
 fn login(_cfg_override: &ConfigOverride, token: String) -> Result<()> {
-    let dir = shellexpand::tilde("~/.config/mainstay");
-    if !Path::new(&dir.to_string()).exists() {
-        fs::create_dir(dir.to_string())?;
+    let mainstay_dir = Path::new(&*shellexpand::tilde("~"))
+        .join(".config")
+        .join("mainstay");
+    if !mainstay_dir.exists() {
+        fs::create_dir(&mainstay_dir)?;
     }
 
-    std::env::set_current_dir(dir.to_string())?;
+    std::env::set_current_dir(&mainstay_dir)?;
 
     // Freely overwrite the entire file since it's not used for anything else.
     let mut file = File::create("credentials")?;
@@ -4403,8 +4533,11 @@ fn registry_api_token(_cfg_override: &ConfigOverride) -> Result<String> {
     struct Credentials {
         registry: Registry,
     }
-    let filename = shellexpand::tilde("~/.config/mainstay/credentials");
-    let mut file = File::open(filename.to_string())?;
+    let filename = Path::new(&*shellexpand::tilde("~"))
+        .join(".config")
+        .join("mainstay")
+        .join("credentials");
+    let mut file = File::open(filename)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
 
@@ -4430,7 +4563,7 @@ fn keys_list(cfg_override: &ConfigOverride) -> Result<()> {
     })
 }
 
-/// Sync the program's `declare_id!` pubkey with the pubkey from `target/deploy/<KEYPAIR>.json`.
+/// Sync program `declare_id!` pubkeys with the pubkey from `target/deploy/<KEYPAIR>.json`.
 fn keys_sync(cfg_override: &ConfigOverride, program_name: Option<String>) -> Result<()> {
     with_workspace(cfg_override, |cfg| {
         let declare_id_regex = RegexBuilder::new(r#"^(([\w]+::)*)declare_id!\("(\w*)"\)"#)
@@ -4438,6 +4571,7 @@ fn keys_sync(cfg_override: &ConfigOverride, program_name: Option<String>) -> Res
             .build()
             .unwrap();
 
+        let mut changed_src = false;
         for program in cfg.get_programs(program_name)? {
             // Get the pubkey from the keypair file
             let actual_program_id = program.pubkey()?.to_string();
@@ -4463,6 +4597,7 @@ fn keys_sync(cfg_override: &ConfigOverride, program_name: Option<String>) -> Res
                     content.replace_range(program_id_match.range(), &actual_program_id);
                     fs::write(&path, content)?;
 
+                    changed_src = true;
                     println!("Updated to {actual_program_id}\n");
                     break;
                 }
@@ -4491,6 +4626,9 @@ fn keys_sync(cfg_override: &ConfigOverride, program_name: Option<String>) -> Res
         }
 
         println!("All program id declarations are synced.");
+        if changed_src {
+            println!("Please rebuild the program to update the generated artifacts.")
+        }
 
         Ok(())
     })
@@ -4610,6 +4748,10 @@ fn get_recommended_micro_lamport_fee(client: &RpcClient, priority_fee: Option<u6
     }
 
     let mut fees = client.get_recent_prioritization_fees(&[])?;
+    if fees.is_empty() {
+        // Fees may be empty, e.g. on localnet
+        return Ok(0);
+    }
 
     // Get the median fee from the most recent recent 150 slots' prioritization fee
     fees.sort_unstable_by_key(|fee| fee.prioritization_fee);
@@ -4661,7 +4803,8 @@ fn get_node_dns_option() -> Result<&'static str> {
 // of spaces in keypair/binary paths, but this should be fixed in the Solana CLI
 // and removed here.
 fn strip_workspace_prefix(absolute_path: String) -> String {
-    let workspace_prefix = std::env::current_dir().unwrap().display().to_string() + "/";
+    let workspace_prefix =
+        std::env::current_dir().unwrap().display().to_string() + std::path::MAIN_SEPARATOR_STR;
     absolute_path
         .strip_prefix(&workspace_prefix)
         .unwrap_or(&absolute_path)
@@ -4689,6 +4832,7 @@ mod tests {
             true,
             false,
             true,
+            PackageManager::default(),
             false,
             ProgramTemplate::default(),
             TestTemplate::default(),
@@ -4709,6 +4853,7 @@ mod tests {
             true,
             false,
             true,
+            PackageManager::default(),
             false,
             ProgramTemplate::default(),
             TestTemplate::default(),
@@ -4729,6 +4874,7 @@ mod tests {
             true,
             false,
             true,
+            PackageManager::default(),
             false,
             ProgramTemplate::default(),
             TestTemplate::default(),

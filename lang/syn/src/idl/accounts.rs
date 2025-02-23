@@ -59,6 +59,7 @@ pub fn gen_idl_build_impl_accounts_struct(accounts: &AccountsStruct) -> TokenStr
                     {
                         Some(&ty.account_type_path)
                     }
+                    Ty::LazyAccount(ty) => Some(&ty.account_type_path),
                     Ty::AccountLoader(ty) => Some(&ty.account_type_path),
                     Ty::InterfaceAccount(ty) => Some(&ty.account_type_path),
                     _ => None,
@@ -127,7 +128,7 @@ pub fn gen_idl_build_impl_accounts_struct(accounts: &AccountsStruct) -> TokenStr
                     if let Some(ty) = <#defined>::create_type() {
                         let account = #idl::IdlAccount {
                             name: ty.name.clone(),
-                            discriminator: <#defined as mainstay_lang::Discriminator>::DISCRIMINATOR.into(),
+                            discriminator: #defined::DISCRIMINATOR.into(),
                         };
                         accounts.insert(account.name.clone(), account);
                         types.insert(ty.name.clone(), ty);
@@ -143,24 +144,37 @@ pub fn gen_idl_build_impl_accounts_struct(accounts: &AccountsStruct) -> TokenStr
 
 fn get_address(acc: &Field) -> TokenStream {
     match &acc.ty {
-        Ty::Program(ty) => ty
-            .account_type_path
-            .path
-            .segments
-            .last()
-            .map(|seg| &seg.ident)
-            .map(|ident| quote! { Some(#ident::id().to_string()) })
-            .unwrap_or_else(|| quote! { None }),
-        Ty::Sysvar(_) => {
+        Ty::Program(_) | Ty::Sysvar(_) => {
             let ty = acc.account_ty();
-            let sysvar_id_trait = quote!(mainstay_lang::solana_program::sysvar::SysvarId);
-            quote! { Some(<#ty as #sysvar_id_trait>::id().to_string()) }
+            let id_trait = matches!(acc.ty, Ty::Program(_))
+                .then(|| quote!(mainstay_lang::Id))
+                .unwrap_or_else(|| quote!(mainstay_lang::solana_program::sysvar::SysvarId));
+            quote! { Some(<#ty as #id_trait>::id().to_string()) }
         }
         _ => acc
             .constraints
             .address
             .as_ref()
             .map(|constraint| &constraint.address)
+            .filter(|address| {
+                match address {
+                    // Allow constants (assume the identifier follows the Rust naming convention)
+                    // e.g. `crate::ID`
+                    syn::Expr::Path(expr) => expr
+                        .path
+                        .segments
+                        .last()
+                        .unwrap()
+                        .ident
+                        .to_string()
+                        .chars()
+                        .all(|c| c.is_uppercase() || c == '_'),
+                    // Allow `const fn`s (assume any stand-alone function call without an argument)
+                    // e.g. `crate::id()`
+                    syn::Expr::Call(expr) => expr.args.is_empty(),
+                    _ => false,
+                }
+            })
             .map(|address| quote! { Some(#address.to_string()) })
             .unwrap_or_else(|| quote! { None }),
     }
@@ -388,6 +402,13 @@ impl SeedPath {
     fn new(seed: &syn::Expr) -> Result<Self> {
         // Convert the seed into the raw string representation.
         let seed_str = seed.to_token_stream().to_string();
+
+        // Check unsupported cases e.g. `&(account.field + 1).to_le_bytes()`
+        if !seed_str.contains('"')
+            && seed_str.contains(|c: char| matches!(c, '+' | '-' | '*' | '/' | '%' | '^'))
+        {
+            return Err(anyhow!("Seed expression not supported: {seed:#?}"));
+        }
 
         // Break up the seed into each subfield component.
         let mut components = seed_str.split('.').collect::<Vec<_>>();

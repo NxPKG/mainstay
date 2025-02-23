@@ -1,7 +1,7 @@
 [package]
 name = "mainstay-client"
-version = "0.30.0"
-authors = ["Mainstay Maintainers <accounts@200ms.io>"]
+version = "0.30.1"
+authors = ["Mainstay Maintainers <dev.sulaiman@icloud.com>"]
 edition = "2021"
 license = "Apache-2.0"
 description = "An RPC client to interact with Mainstay programs"
@@ -13,16 +13,17 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 async = []
 debug = []
+mock = []
 
 [dependencies]
-mainstay-lang = { path = "../lang", version = "0.30.0" }
+mainstay-lang = { path = "../lang", version = "0.30.1" }
 anyhow = "1"
 futures = "0.3"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
-solana-account-decoder = "1.17.3"
-solana-client = "1.17.3"
-solana-sdk = "1.17.3"
+solana-account-decoder = "2"
+solana-client = "2"
+solana-sdk = "2"
 thiserror = "1"
 tokio = { version = "1", features = ["rt", "sync"] }
 url = "2"

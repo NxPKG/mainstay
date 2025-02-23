@@ -1,7 +1,7 @@
 [package]
 name = "mainstay-attribute-program"
-version = "0.30.0"
-authors = ["Mainstay Maintainers <accounts@200ms.io>"]
+version = "0.30.1"
+authors = ["Mainstay Maintainers <dev.sulaiman@icloud.com>"]
 repository = "https://github.com/nxpkg/mainstay"
 license = "Apache-2.0"
 description = "Mainstay attribute macro for defining a program"
@@ -16,8 +16,8 @@ idl-build = ["mainstay-syn/idl-build"]
 interface-instructions = ["mainstay-syn/interface-instructions"]
 
 [dependencies]
-mainstay-lang-idl = { path = "../../../idl", version = "0.1.0", features = ["convert"] }
-mainstay-syn = { path = "../../syn", version = "0.30.0" }
+mainstay-lang-idl = { path = "../../../idl", version = "0.1.1", features = ["convert"] }
+mainstay-syn = { path = "../../syn", version = "0.30.1" }
 anyhow = "1"
 bs58 = "0.5"
 heck = "0.3"

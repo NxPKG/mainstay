@@ -1,6 +1,6 @@
 {
   "name": "@nx-pkg/mainstay-cli",
-  "version": "0.30.0",
+  "version": "0.30.1",
   "description": "Mainstay CLI tool",
   "homepage": "https://github.com/nxpkg/mainstay#readme",
   "bugs": {
