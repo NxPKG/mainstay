@@ -17,7 +17,7 @@ pub fn parse(f: &syn::Field, f_ty: Option<&Ty>) -> ParseResult<ConstraintGroup> 
 pub fn is_account(attr: &&syn::Attribute) -> bool {
     attr.path
         .get_ident()
-        .map_or(false, |ident| ident == "account")
+        .is_some_and(|ident| ident == "account")
 }
 
 // Parses a single constraint from a parse stream for `#[account(<STREAM>)]`.
@@ -1019,7 +1019,7 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
             }),
             zeroed: into_inner!(zeroed),
             mutable: into_inner!(mutable),
-            signer: into_inner!(signer),
+            signer: into_inner!(singer),
             has_one: into_inner_vec!(has_one),
             raw: into_inner_vec!(raw),
             owner: into_inner!(owner),
