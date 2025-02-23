@@ -71,7 +71,7 @@ impl CrateContext {
         Struct field "{}" is unsafe, but is not documented.
         Please add a `/// CHECK:` doc comment explaining why no checks through types are necessary.
         See https://www.mainstay-lang.com/docs/the-accounts-struct#safety-checks for more information.
-                    "#,
+                        "#,
                         ctx.file.canonicalize().unwrap().display(),
                         span.start().line,
                         span.start().column,
@@ -88,15 +88,16 @@ impl CrateContext {
 ///
 /// Keeps track of items defined within a module.
 #[derive(Copy, Clone)]
-pub struct ModuleContext<'krate> {
-    detail: &'krate ParsedModule,
+pub struct ModuleContext<'_> {
+    detail: &'_ ParsedModule,
 }
 
-impl<'krate> ModuleContext<'krate> {
+impl ModuleContext<'_> {
     pub fn items(&self) -> impl Iterator<Item = &syn::Item> {
         self.detail.items.iter()
     }
 }
+
 struct ParsedModule {
     name: String,
     file: PathBuf,
